@@ -40,9 +40,12 @@ class DashboardResource extends JsonResource
             return [
                 'slug' => $item->slug,
                 'date' => Carbon::parse($item->created_at)->isoFormat('D MMMM YYYY'),
+                'model_used' => $item->model_used,
                 'risk_percentage' => $item->final_risk_percentage,
-                'risk_category' => $item->result_details['riskSummary']['riskCategory']['title'] ?? 'N/A',
-            ];
+                'input' => $item->inputs,
+                'generated_value' => $item->generated_values,
+                'result_details' => $item->result_details,
+                ];
         });
 
         return [

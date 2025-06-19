@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -60,7 +61,16 @@ class KardiaRiskRequest extends FormRequest
 
         // --- Aturan Kondisional jika Pengguna Memiliki Diabetes ---
         if ($this->input('has_diabetes')) {
-            $rules['age_at_diabetes_diagnosis'] = ['required', 'integer', 'min:1', 'max:' . $this->input('age')];
+            // 1. Dapatkan pengguna yang terotentikasi
+            $user = $this->user();
+            $profileAge = 80; // Nilai default jika profil tidak ditemukan
+
+            // 2. Hitung usia sebenarnya dari database
+            if ($user && $user->profile) {
+                $profileAge = Carbon::parse($user->profile->date_of_birth)->age;
+            }
+
+            $rules['age_at_diabetes_diagnosis'] = ['required', 'integer', 'min:1', 'max:' . $profileAge];
 
             // 4. HbA1c
             $rules['hba1c_input_type'] = ['required', 'string', Rule::in(['manual', 'proxy'])];

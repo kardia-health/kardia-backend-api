@@ -171,7 +171,6 @@ Berdasarkan SEMUA data di atas, hasilkan laporan komprehensif dalam format JSON 
       "medicalConsultation": {
         "recommendationLevel": {
           "code": "{{ROUTINE|RECOMMENDED|URGENT}}",
-          "title": "{{Tingkat Rekomendasi}}",
           "description": "{{Penjelasan mengapa konsultasi perlu}}"
         },
         "suggestedTests": [
@@ -192,7 +191,8 @@ Berdasarkan SEMUA data di atas, hasilkan laporan komprehensif dalam format JSON 
       ],
       "impactSimulation": {
         "message": "{{Kalimat prediksi dampak jika saran dilakukan}}",
-        "riskAfterChange": "{{float}}"
+        "riskAfterChange": "{{float}}",
+        "timeEstimation": "{{Waktu impactSimulation}}"
       }
     },
     "personalizedEducation": {
@@ -272,6 +272,7 @@ Contoh: “Kurangi tekanan darah ke <135 mmHg dalam 3 bulan.”
 ## 4.9. impactSimulation
 Simulasikan penurunan risiko jika saran utama dijalankan. Contoh:  
 “Jika Anda berhenti merokok, risiko Anda dapat turun 50% dalam setahun.”
+Jangan lupa berikan estimasi waktunya juga.
 
 ## 4.10. keyHealthMetrics
 Ambil 2–3 dari `generated_values` seperti tekanan darah, kolesterol, dan denyut jantung maksimal. Berikan nilai pengguna dan idealnya, jangan lupa kategorinya berdasarkan perbandingan antara nilai pengguna dan idealnya.
