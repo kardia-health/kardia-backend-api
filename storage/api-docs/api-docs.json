@@ -1,0 +1,750 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Kardia API Documentation",
+        "description": "API Documentation for Kardia Application",
+        "contact": {
+            "email": "muhana.naufal17@gmail.com"
+        },
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000",
+            "description": "Demo API Server"
+        }
+    ],
+    "paths": {
+        "/api/v1/register": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Register a new user",
+                "description": "Creates a new user account and returns an authentication token.",
+                "operationId": "registerUser",
+                "requestBody": {
+                    "description": "User registration data",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "email",
+                                    "password",
+                                    "password_confirmation"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "John Doe"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "john.doe@example.com"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "example": "password123"
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "example": "password123"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful registration",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Response_Auth_Success"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Response_Error_Validation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/login": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Login an existing user",
+                "description": "Authenticates a user and returns an authentication token.",
+                "operationId": "loginUser",
+                "requestBody": {
+                    "description": "User credentials",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "john.doe@example.com"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "example": "password123"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful login",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Response_Auth_Success"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid Credentials",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Response_Error_Unauthorized"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/logout": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Logout the current user",
+                "description": "Invalidates the user's current authentication token.",
+                "operationId": "logoutUser",
+                "responses": {
+                    "200": {
+                        "description": "Successful logout",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Response_Logout_Success"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Response_Error_Unauthorized"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/user": {
+            "get": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Get authenticated user data",
+                "description": "Returns the data of the currently logged-in user.",
+                "operationId": "getAuthenticatedUser",
+                "responses": {
+                    "200": {
+                        "description": "User data retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Response_User_Success"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Response_Error_Unauthorized"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Response_Auth_Success": {
+                "title": "Response_Auth_Success",
+                "type": "object",
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Response_Error_Unauthorized"
+                    },
+                    {
+                        "properties": {
+                            "success": {
+                                "type": "boolean",
+                                "example": true
+                            },
+                            "message": {
+                                "type": "string",
+                                "example": "Action completed successfully"
+                            },
+                            "data": {
+                                "properties": {
+                                    "access_token": {
+                                        "type": "string",
+                                        "example": "4|aBcDeFgHiJkLmNoPqRsTuVwXyZ123456"
+                                    },
+                                    "token_type": {
+                                        "type": "string",
+                                        "example": "Bearer"
+                                    },
+                                    "user": {
+                                        "$ref": "#/components/schemas/Model_UserBase"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ]
+            },
+            "Response_Logout_Success": {
+                "title": "Response_Logout_Success",
+                "type": "object",
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Response_Error_Unauthorized"
+                    },
+                    {
+                        "properties": {
+                            "success": {
+                                "type": "boolean",
+                                "example": true
+                            },
+                            "message": {
+                                "type": "string",
+                                "example": "User logged out successfully"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ]
+            },
+            "Response_User_Success": {
+                "title": "Response_User_Success",
+                "type": "object",
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Response_Error_Unauthorized"
+                    },
+                    {
+                        "properties": {
+                            "success": {
+                                "type": "boolean",
+                                "example": true
+                            },
+                            "message": {
+                                "type": "string",
+                                "example": "User fetched successfully"
+                            },
+                            "data": {
+                                "$ref": "#/components/schemas/Model_UserBase"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ]
+            },
+            "Response_Error_Validation": {
+                "title": "Response_Error_Validation",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "The given data was invalid."
+                    },
+                    "errors": {
+                        "type": "object",
+                        "example": {
+                            "email": [
+                                "The email field is required."
+                            ],
+                            "password": [
+                                "The password field is required."
+                            ]
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "Response_Error_Unauthorized": {
+                "title": "Response_Error_Unauthorized",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Unauthenticated."
+                    }
+                },
+                "type": "object"
+            },
+            "Request_Login": {
+                "title": "Request_Login",
+                "required": [
+                    "email",
+                    "password"
+                ],
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "john.doe@example.com"
+                    },
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "example": "password123"
+                    }
+                },
+                "type": "object"
+            },
+            "Request_Register": {
+                "title": "Request_Register",
+                "required": [
+                    "name",
+                    "email",
+                    "password",
+                    "password_confirmation"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "example": "John Doe"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "john.doe@example.com"
+                    },
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "example": "password123"
+                    },
+                    "password_confirmation": {
+                        "type": "string",
+                        "format": "password",
+                        "example": "password123"
+                    }
+                },
+                "type": "object"
+            },
+            "Model_HeartAnalysis": {
+                "title": "Model_HeartAnalysis",
+                "description": "Generated analysis based on a user's heart survey",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": "true",
+                        "example": 1
+                    },
+                    "heart_survey_id": {
+                        "description": "ID of the survey this analysis is based on",
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "risk_percentage": {
+                        "description": "Calculated risk percentage (0-100)",
+                        "type": "integer",
+                        "example": 25
+                    },
+                    "risk_category": {
+                        "description": "Category of the calculated risk",
+                        "type": "string",
+                        "enum": [
+                            "sangat_rendah",
+                            "rendah",
+                            "menengah",
+                            "tinggi",
+                            "sangat_tinggi"
+                        ],
+                        "example": "rendah"
+                    },
+                    "score_interpretation": {
+                        "description": "Text interpretation of the risk score",
+                        "type": "string",
+                        "example": "Your risk level is considered low based on the provided answers."
+                    },
+                    "main_risk_factors": {
+                        "description": "List of major contributing risk factors",
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "example": "Konsumsi minuman manis yang sering"
+                        }
+                    },
+                    "medium_risk_factors": {
+                        "description": "List of moderate contributing risk factors",
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "example": "Aktivitas fisik kurang"
+                        }
+                    },
+                    "protective_factors": {
+                        "description": "List of factors that are helping reduce risk",
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "example": "Tidak merokok"
+                        }
+                    },
+                    "medical_recommendations": {
+                        "description": "Recommended actions regarding medical consultation",
+                        "type": "string",
+                        "example": "Disarankan untuk melakukan pengecekan tekanan darah rutin setiap 6 bulan."
+                    },
+                    "lifestyle_recommendations": {
+                        "description": "List of recommended lifestyle changes",
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "example": "Kurangi konsumsi minuman manis hingga maksimal 1 kali seminggu."
+                        }
+                    },
+                    "monitoring_plan": {
+                        "description": "Plan for monitoring health progress",
+                        "type": "string",
+                        "example": "Pantau berat badan setiap bulan dan perhatikan gejala seperti nyeri dada."
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": "true",
+                        "example": "2025-06-12 05:20:00"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": "true",
+                        "example": "2025-06-12 05:20:00"
+                    }
+                },
+                "type": "object"
+            },
+            "Model_HeartSurvey": {
+                "title": "Model_HeartSurvey",
+                "description": "User's submitted health survey data",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": "true",
+                        "example": 1
+                    },
+                    "user_id": {
+                        "description": "ID of the user who submitted the survey",
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "diet_fried_food": {
+                        "description": "Frequency of eating fried food.",
+                        "type": "string",
+                        "enum": [
+                            "jarang",
+                            "kadang-kadang",
+                            "sering"
+                        ],
+                        "example": "kadang-kadang"
+                    },
+                    "diet_sweet_drinks": {
+                        "description": "Frequency of consuming sweet drinks.",
+                        "type": "string",
+                        "enum": [
+                            "jarang",
+                            "kadang-kadang",
+                            "sering"
+                        ],
+                        "example": "sering"
+                    },
+                    "smoking_status": {
+                        "description": "User's smoking status.",
+                        "type": "string",
+                        "enum": [
+                            "tidak_pernah",
+                            "sudah_berhenti",
+                            "masih_aktif"
+                        ],
+                        "example": "tidak_pernah"
+                    },
+                    "physical_activity": {
+                        "description": "User's physical activity level.",
+                        "type": "string",
+                        "enum": [
+                            "aktif",
+                            "kurang_aktif",
+                            "sangat_tidak_aktif"
+                        ],
+                        "example": "aktif"
+                    },
+                    "weight_trend": {
+                        "description": "Recent weight trend.",
+                        "type": "string",
+                        "enum": [
+                            "stabil_turun",
+                            "naik_sedikit",
+                            "naik_cukup_banyak"
+                        ],
+                        "example": "stabil_turun"
+                    },
+                    "fitness_level": {
+                        "description": "User's perceived fitness level.",
+                        "type": "string",
+                        "enum": [
+                            "bugar",
+                            "sedikit_lelah",
+                            "sangat_mudah_lelah"
+                        ],
+                        "example": "bugar"
+                    },
+                    "chest_discomfort": {
+                        "description": "Frequency of chest discomfort.",
+                        "type": "string",
+                        "enum": [
+                            "tidak_pernah",
+                            "pernah",
+                            "semakin_sering"
+                        ],
+                        "example": "tidak_pernah"
+                    },
+                    "chest_discomfort_trigger": {
+                        "description": "Trigger for chest discomfort.",
+                        "type": "string",
+                        "enum": [
+                            "stres",
+                            "aktivitas_fisik",
+                            "saat_istirahat",
+                            "tidak_relevan"
+                        ],
+                        "example": "tidak_relevan"
+                    },
+                    "gum_health_issue": {
+                        "description": "Frequency of gum health issues.",
+                        "type": "string",
+                        "enum": [
+                            "tidak_pernah",
+                            "kadang-kadang",
+                            "sering"
+                        ],
+                        "example": "jarang"
+                    },
+                    "sleep_quality_issue": {
+                        "description": "User's sleep quality issues.",
+                        "type": "string",
+                        "enum": [
+                            "tidak_pernah",
+                            "ya_pernah",
+                            "ya_dan_lelah"
+                        ],
+                        "example": "tidak_pernah"
+                    },
+                    "has_routine_medication": {
+                        "description": "Does the user take routine medication?",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "has_abnormal_doctor_signal": {
+                        "description": "Has a doctor ever noted an abnormal signal?",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": "true",
+                        "example": "2025-06-12 05:15:00"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": "true",
+                        "example": "2025-06-12 05:15:00"
+                    }
+                },
+                "type": "object"
+            },
+            "Model_UserBase": {
+                "title": "Model_UserBase",
+                "description": "User model",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": "true",
+                        "example": "1"
+                    },
+                    "name": {
+                        "description": "User's full name",
+                        "type": "string",
+                        "example": "John Doe"
+                    },
+                    "email": {
+                        "description": "User's email address",
+                        "type": "string",
+                        "format": "email",
+                        "example": "john.doe@example.com"
+                    },
+                    "role": {
+                        "description": "User's role",
+                        "type": "string",
+                        "example": "user"
+                    },
+                    "created_at": {
+                        "description": "Initial creation timestamp",
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": "true",
+                        "example": "2025-06-12 04:30:00"
+                    }
+                },
+                "type": "object"
+            },
+            "Model_UserProfile": {
+                "title": "Model_UserProfile",
+                "description": "Detailed user profile information",
+                "properties": {
+                    "id": {
+                        "description": " * @OA\\Schema(\n * schema=\"Model_UserProfile\",\n * title=\"Model_UserProfile\",\n * description=\"Detailed user profile information\",\n * @OA\\Property(property=\"id\", type=\"integer\", readOnly=\"true\", example=1),\n * @OA\\Property(property=\"user_id\", type=\"integer\", description=\"ID of the user this profile belongs to\", example=1),\n * @OA\\Property(property=\"date_of_birth\", type=\"string\", format=\"date\", nullable=true, description=\"User's date of birth\", example=\"1990-01-15\"),\n * @OA\\Property(property=\"gender\", type=\"string\", enum={\"male\", \"female\"}, nullable=true, description=\"User's gender\", example=\"male\"),\n * @OA\\Property(property=\"has_family_history\", type=\"boolean\", nullable=true, description=\"Does the user have a family history of heart disease?\", example=true),\n * @OA\\Property(property=\"allergies\", type=\"string\", nullable=true, description=\"List of user's known allergies\", example=\"Pollen, Peanuts\"),\n * @OA\\Property(property=\"medical_conditions\", type=\"string\", nullable=true, description=\"List of user's known medical conditions\", example=\"Asthma\"),\n * @OA\\Property(property=\"created_at\", type=\"string\", format=\"date-time\", readOnly=\"true\", example=\"2025-06-12 04:45:00\"),\n * @OA\\Property(property=\"updated_at\", type=\"string\", format=\"date-time\", readOnly=\"true\", example=\"2025-06-12 04:45:00\")\n * )\n ",
+                        "type": "integer",
+                        "readOnly": "true",
+                        "example": 1
+                    },
+                    "user_id": {
+                        "description": "ID of the user this profile belongs to",
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "date_of_birth": {
+                        "description": "User's date of birth",
+                        "type": "string",
+                        "format": "date",
+                        "example": "1990-01-15",
+                        "nullable": true
+                    },
+                    "gender": {
+                        "description": "User's gender",
+                        "type": "string",
+                        "enum": [
+                            "male",
+                            "female"
+                        ],
+                        "example": "male",
+                        "nullable": true
+                    },
+                    "has_family_history": {
+                        "description": "Does the user have a family history of heart disease?",
+                        "type": "boolean",
+                        "example": true,
+                        "nullable": true
+                    },
+                    "allergies": {
+                        "description": "List of user's known allergies",
+                        "type": "string",
+                        "example": "Pollen, Peanuts",
+                        "nullable": true
+                    },
+                    "medical_conditions": {
+                        "description": "List of user's known medical conditions",
+                        "type": "string",
+                        "example": "Asthma",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": "true",
+                        "example": "2025-06-12 04:45:00"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": "true",
+                        "example": "2025-06-12 04:45:00"
+                    }
+                },
+                "type": "object"
+            }
+        },
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "description": "Enter token in format (Bearer <token>)",
+                "name": "Authorization",
+                "in": "header",
+                "bearerFormat": "JWT",
+                "scheme": "bearer"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Authentication",
+            "description": "Authentication"
+        }
+    ]
+}
