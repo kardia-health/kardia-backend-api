@@ -53,7 +53,7 @@ class GeminiReportService
     //   ]
     // ]);
     // Path absolut ke file sertifikat Anda
-    $certificatePath = 'C:\ProgramData\laragon\etc\ssl\cacert.pem';
+    $certificatePath = config('filesystems.certificate_path');
 
     $response = Http::withOptions([
       'verify' => $certificatePath

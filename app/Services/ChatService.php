@@ -208,7 +208,7 @@ PROMPT;
 
   private function getGeminiChatCompletion(string $prompt): array
   {
-    $certificatePath = 'C:\ProgramData\laragon\etc\ssl\cacert.pem';
+    $certificatePath = config('filesystems.certificate_path');
     // Logika ini tetap sama
     $response = Http::withOptions([
       'verify' => $certificatePath
