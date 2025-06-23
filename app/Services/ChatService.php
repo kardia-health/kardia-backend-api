@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\Conversation;
 use App\Models\User;
+use App\Models\UserProfile;
+use App\Repositories\ChatMessageRepository;
+use App\Repositories\RiskAssessmentRepository;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\Http;
@@ -15,8 +18,10 @@ class ChatService
   private string $apiKey;
   private string $apiUrl;
 
-  public function __construct()
-  {
+  public function __construct(
+    private ChatMessageRepository $chatMessageRepository,
+    private RiskAssessmentRepository $riskAssessmentRepository
+  ) {
     $this->apiKey = config('services.gemini.api_key');
     if (empty($this->apiKey)) {
       Log::critical('FATAL ERROR: GEMINI_API_KEY tidak diatur.');
@@ -36,16 +41,17 @@ class ChatService
   public function getChatResponse(string $userMessage, User $user, Conversation $conversation): array
   {
     try {
-      $this->saveChatMessage($conversation, 'user', $userMessage);
+      // Delegasikan penyimpanan ke repository
+      $this->chatMessageRepository->createMessage($conversation, 'user', $userMessage);
+
       $userContext = $this->buildUserContext($user);
       $chatHistoryContext = $this->buildChatHistoryContext($conversation);
-
-      // [PERBAIKAN] Sekarang kita teruskan 4 argumen yang dibutuhkan:
-      // $user (untuk mengecek bahasa), $userMessage, $userContext, dan $chatHistoryContext
       $prompt = $this->buildPrompt($user, $userMessage, $userContext, $chatHistoryContext);
-
       $aiReplyArray = $this->getGeminiChatCompletion($prompt);
-      $this->saveChatMessage($conversation, 'model', json_encode($aiReplyArray));
+
+      // Delegasikan penyimpanan balasan AI ke repository
+      $this->chatMessageRepository->createMessage($conversation, 'model', json_encode($aiReplyArray));
+
       return $aiReplyArray;
     } catch (\Throwable $e) {
       Log::error('ChatService getChatResponse failed: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
@@ -56,28 +62,31 @@ class ChatService
   /**
    * Menyimpan sebuah pesan ke dalam tabel chat_messages milik sebuah percakapan.
    */
-  private function saveChatMessage(Conversation $conversation, string $role, string $content): void
-  {
-    // Logika sekarang menyimpan pesan ke relasi milik Conversation.
-    $conversation->chatMessages()->create([
-      'role' => $role,
-      'content' => $content,
-    ]);
-  }
+  // private function saveChatMessage(Conversation $conversation, string $role, string $content): void
+  // {
+  //   // Logika sekarang menyimpan pesan ke relasi milik Conversation.
+  //   $conversation->chatMessages()->create([
+  //     'role' => $role,
+  //     'content' => $content,
+  //   ]);
+  // }
 
   /**
    * Membangun konteks dari profil dan 3 hasil analisis risiko TERAKHIR.
    */
   private function buildUserContext(User $user): string
   {
-    $profile = $user->profile;
-    if (!$profile) return "Pengguna ini belum melengkapi profilnya.";
+    if (!$user->profile) {
+      return "Pengguna ini belum melengkapi profilnya.";
+    }
+
+    $profile = UserProfile::findAndCache($user->profile->id);
 
     $age = Carbon::parse($profile->date_of_birth)->age;
     $context = "PROFIL PENGGUNA:\n- Nama: {$profile->first_name}\n- Usia Saat Ini: {$age} tahun\n- Jenis Kelamin: {$profile->sex}\n";
 
-    // Ambil 3 riwayat analisis terakhir
-    $assessments = $profile->riskAssessments()->latest()->take(3)->get();
+    // Ambil data dari repository, yang sudah di-cache
+    $assessments = $this->riskAssessmentRepository->getLatestThreeForUser($user);
 
     if ($assessments->isNotEmpty()) {
       $context .= "\n## RIWAYAT 3 ANALISIS RISIKO TERAKHIR\n";
@@ -99,12 +108,13 @@ class ChatService
    */
   private function buildChatHistoryContext(Conversation $conversation): string
   {
-    // Mengambil 10 pesan terakhir DARI PERCAKAPAN INI, bukan dari semua chat pengguna.
-    $messages = $conversation->chatMessages()->latest()->take(10)->get()->reverse();
+    // Ambil data dari repository, yang sudah di-cache
+    $messages = $this->chatMessageRepository->getLatestMessages($conversation);
 
     if ($messages->isEmpty()) {
       return "Ini adalah awal dari percakapan kita.";
     }
+
 
     $history = "RIWAYAT PERCAKAPAN DI THREAD INI:\n";
     foreach ($messages as $message) {

@@ -13,6 +13,7 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Repositories\UserRepository;
 use App\Services\Auth\TokenService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -37,7 +38,8 @@ class AuthController extends Controller
     public function __construct(
         private readonly RegisterUserAction $registerUserAction,
         private readonly LoginUserAction $loginUserAction,
-        private readonly TokenService $tokenService
+        private readonly TokenService $tokenService,
+        private readonly UserRepository $userRepository
     ) {}
 
     /**
@@ -177,9 +179,12 @@ class AuthController extends Controller
      */
     public function user(Request $request): JsonResponse
     {
+        // Delegasikan semua tugas ke repository yang sudah mengelola cache.
+        $userResource = $this->userRepository->getAuthenticatedUserResource($request->user());
+
         return $this->success(
             message: 'User data retrieved successfully',
-            data: new UserResource($request->user())
+            data: $userResource
         );
     }
 
@@ -196,26 +201,24 @@ class AuthController extends Controller
 
         return $this->success('Password berhasil diubah.');
     }
-
     public function deleteAccount(DeleteAccountRequest $request): JsonResponse
     {
         $user = $request->user();
 
         if (!Hash::check($request->input('password'), $user->password)) {
-            return $this->error(
-                message: 'Password is incorrect.',
-                statusCode: Response::HTTP_UNAUTHORIZED
-            );
+            return $this->error('Password is incorrect.', Response::HTTP_UNAUTHORIZED);
         }
 
         // Hapus akun & token
-        $user->tokens()->delete(); // Revoke all tokens (Sanctum)
-        $user->forceDelete();
+        $user->tokens()->delete();
+        $user->forceDelete(); // Ini akan memicu onDelete('cascade') di profil, dll.
 
-        return $this->success(
-            message: 'Your account has been deleted successfully.'
-        );
+        // Meskipun cache akan basi, kita bisa hapus secara eksplisit jika perlu,
+        // tapi dengan key dinamis kita, ini tidak wajib.
+
+        return $this->success('Your account has been deleted successfully.');
     }
+
 
     /**
      * Format authentication response data

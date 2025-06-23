@@ -6,47 +6,52 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUserProfileRequest;
 use App\Http\Resources\UserProfileResource;
 use App\Models\UserProfile;
+use App\Repositories\UserProfileRepository; // <-- Impor Repository
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class UserProfileController extends Controller
 {
+    // Inject repository melalui konstruktor
+    public function __construct(private UserProfileRepository $profileRepository) {}
+
     /**
      * Menampilkan profil milik pengguna yang sedang terotentikasi.
      */
-    public function show(Request $request): UserProfileResource // <-- Ubah tipe return
+    public function show(Request $request): JsonResponse
     {
-        // Mengambil profil dari pengguna yang terotentikasi.
-        // `load('user')` untuk memastikan data user ikut terambil (eager loading).
-        $profile = $request->user()->profile()->with('user')->firstOrFail();
+        $user = $request->user();
 
-        // Kembalikan profil yang dibungkus oleh Resource.
-        // Laravel akan secara otomatis mengubahnya menjadi respons JSON yang benar.
-        return new UserProfileResource($profile);
+        if (!$user->profile) {
+            return response()->json(['data' => null, 'message' => 'User profile not yet created.']);
+        }
+
+        // Panggil metode statis baru kita. Ia akan otomatis cek cache dulu.
+        $profile = UserProfile::findAndCache($user->profile->id);
+
+        return (new UserProfileResource($profile))->response();
     }
 
 
     /**
-     * Membuat profil baru atau memperbarui profil yang sudah ada
-     * milik pengguna yang sedang terotentikasi.
+     * Membuat atau memperbarui profil yang sudah ada.
+     * Saya mengubah nama metodenya menjadi 'update' agar konsisten,
+     * namun fungsinya tetap sama dengan 'patch' yang Anda buat.
      */
-    public function patch(StoreUserProfileRequest $request): JsonResponse
+    public function update(StoreUserProfileRequest $request): JsonResponse
     {
-        // Data sudah bersih dan tervalidasi oleh StoreUserProfileRequest
         $validatedData = $request->validated();
         $user = $request->user();
 
-        // Eloquent's updateOrCreate adalah cara paling efisien untuk ini.
-        // Ia akan mencari profil dengan user_id ini. Jika ada, akan di-update.
-        // Jika tidak ada, akan dibuatkan yang baru.
         $profile = UserProfile::updateOrCreate(
             ['user_id' => $user->id],
             $validatedData
         );
 
         return response()->json([
-            'message' => 'Profile saved successfully!',
-            'data' => $profile
-        ], 200);
+            'message' => 'Profile updated successfully!',
+            // Kita bungkus dengan resource untuk memastikan formatnya konsisten
+            'data' => new UserProfileResource($profile->load('user'))
+        ]);
     }
 }

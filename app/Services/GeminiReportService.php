@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\RiskAssessment;
 use App\Models\UserProfile;
 use Exception;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+
 use Illuminate\Support\Facades\Log;
 use JsonException;
 
@@ -35,48 +37,62 @@ class GeminiReportService
    */
   public function getFullReport(UserProfile $userProfile, RiskAssessment $assessment): array
   {
-    if (empty($this->apiKey)) {
-      Log::critical('GEMINI_API_KEY tidak diatur.');
-      throw new Exception("API key untuk layanan AI tidak diatur.");
-    }
 
-    // Bangun prompt dengan data yang sudah matang
-    $prompt = $this->buildPrompt($userProfile, $assessment);
+    // 1. Buat kunci cache yang unik berdasarkan ID assessment dan kapan terakhir di-update.
+    //    Jika assessment di-update (misal: dengan laporan ini), timestamp berubah,
+    //    dan cache ini secara otomatis menjadi basi (tidak valid lagi).
+    $cacheKey = "gemini_report:assessment:{$assessment->id}:{$assessment->updated_at->timestamp}";
 
-    Log::info("Mengirim permintaan laporan naratif ke Gemini untuk user ID: {$userProfile->user_id}");
+    // 2. Gunakan Cache::rememberForever.
+    //    Data akan disimpan selamanya sampai kita hapus secara manual atau key-nya berubah.
+    return Cache::rememberForever($cacheKey, function () use ($userProfile, $assessment) {
 
-    // $response = Http::timeout(90)->post($this->apiUrl, [
-    //   'contents' => [['parts' => [['text' => $prompt]]]],
-    //   'generationConfig' => [
-    //     'response_mime_type' => 'application/json',
-    //     'temperature' => 0.7,
-    //   ]
-    // ]);
-    // Path absolut ke file sertifikat Anda
-    $certificatePath = config('filesystems.certificate_path');
+      // 3. Blok kode ini HANYA akan dijalankan jika laporan tidak ada di cache.
+      Log::info("CACHE MISS: Membuat laporan Gemini baru untuk assessment ID: {$assessment->id}");
 
-    $response = Http::withOptions([
-      'verify' => $certificatePath
-    ])->timeout(300)->post($this->apiUrl, [
-      'contents' => [['parts' => [['text' => $prompt]]]],
-      'generationConfig' => [
-        'response_mime_type' => 'application/json',
-        'temperature' => 0.7,
-      ]
-    ]);
+      if (empty($this->apiKey)) {
+        Log::critical('GEMINI_API_KEY tidak diatur.');
+        throw new Exception("API key untuk layanan AI tidak diatur.");
+      }
 
-    if ($response->successful() && isset($response->json()['candidates'][0]['content']['parts'][0]['text'])) {
-      $geminiTextResponse = $response->json()['candidates'][0]['content']['parts'][0]['text'];
-      Log::info("Respons laporan naratif dari Gemini diterima untuk user ID: {$userProfile->user_id}");
-      return $this->parseGeminiResponse($geminiTextResponse);
-    }
+      // Bangun prompt dengan data yang sudah matang
+      $prompt = $this->buildPrompt($userProfile, $assessment);
 
-    $errorBody = $response->body();
-    Log::error("Panggilan API Gemini gagal untuk laporan naratif.", [
-      'status' => $response->status(),
-      'body' => $errorBody
-    ]);
-    throw new Exception("Gagal mendapatkan analisis dari layanan AI: " . ($response->json('error.message') ?? $errorBody));
+      Log::info("Mengirim permintaan laporan naratif ke Gemini untuk user ID: {$userProfile->user_id}");
+
+      // $response = Http::timeout(90)->post($this->apiUrl, [
+      //   'contents' => [['parts' => [['text' => $prompt]]]],
+      //   'generationConfig' => [
+      //     'response_mime_type' => 'application/json',
+      //     'temperature' => 0.7,
+      //   ]
+      // ]);
+      // Path absolut ke file sertifikat Anda
+      $certificatePath = config('filesystems.certificate_path');
+
+      $response = Http::withOptions([
+        'verify' => $certificatePath
+      ])->timeout(300)->post($this->apiUrl, [
+        'contents' => [['parts' => [['text' => $prompt]]]],
+        'generationConfig' => [
+          'response_mime_type' => 'application/json',
+          'temperature' => 0.7,
+        ]
+      ]);
+
+      if ($response->successful() && isset($response->json()['candidates'][0]['content']['parts'][0]['text'])) {
+        $geminiTextResponse = $response->json()['candidates'][0]['content']['parts'][0]['text'];
+        Log::info("Respons laporan naratif dari Gemini diterima untuk user ID: {$userProfile->user_id}");
+        return $this->parseGeminiResponse($geminiTextResponse);
+      }
+
+      $errorBody = $response->body();
+      Log::error("Panggilan API Gemini gagal untuk laporan naratif.", [
+        'status' => $response->status(),
+        'body' => $errorBody
+      ]);
+      throw new Exception("Gagal mendapatkan analisis dari layanan AI: " . ($response->json('error.message') ?? $errorBody));
+    });
   }
 
   /**

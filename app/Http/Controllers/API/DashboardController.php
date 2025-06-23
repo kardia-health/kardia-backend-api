@@ -4,21 +4,30 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DashboardResource;
+use App\Repositories\RiskAssessmentRepository; // <-- Impor Repository
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function getDashboardData(Request $request)
-    {
-        // Ambil semua riwayat analisis milik pengguna, diurutkan dari yang terbaru
-        $assessments = $request->user()->profile->riskAssessments()->latest()->get();
+    // Inject repository melalui konstruktor
+    public function __construct(private RiskAssessmentRepository $assessmentRepository) {}
 
-        // Jika tidak ada riwayat, kembalikan respons kosong yang informatif
+    public function getDashboardData(Request $request): JsonResponse
+    {
+        // 1. Delegasikan tugas pengambilan data ke Repository.
+        //    Controller tidak tahu menahu tentang database atau cache.
+        $assessments = $this->assessmentRepository->getAssessmentsForDashboard($request->user());
+
+        // 2. Jika tidak ada riwayat, kembalikan respons kosong yang informatif.
         if ($assessments->isEmpty()) {
             return response()->json(['data' => null, 'message' => 'No assessment history found.']);
         }
 
-        // Bungkus dengan Resource untuk transformasi data
-        return new DashboardResource($assessments);
+        // 3. Bungkus dengan Resource untuk transformasi data.
+        //    (Pastikan Anda sudah memiliki DashboardResource dari langkah kita sebelumnya)
+        $formattedData = (new DashboardResource($assessments))->resolve();
+
+        return response()->json(['data' => $formattedData]);
     }
 }

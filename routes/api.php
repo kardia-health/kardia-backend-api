@@ -21,8 +21,8 @@ Route::prefix('v1')->group(function () {
 
   // Protected routes
   Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/profile', [UserProfileController::class, 'show']);
-    Route::patch('/profile', [UserProfileController::class, 'patch']);
+    Route::get('/profile', [UserProfileController::class, 'show'])->middleware('cache.response:60');
+    Route::patch('/profile', [UserProfileController::class, 'update']);
 
     // Endpoint untuk memulai analisis & mendapatkan skor numerik CEPAT
     Route::post('/risk-assessments', [KardiaController::class, 'startAssessment']);
@@ -30,15 +30,15 @@ Route::prefix('v1')->group(function () {
     Route::patch('/risk-assessments/{assessment:slug}/personalize', [KardiaController::class, 'generatePersonalizedReport']);
 
     // Endpoint untuk mendapatkan detail lengkap dari satu analisis
-    Route::get('/dashboard', [DashboardController::class, 'getDashboardData']);
+    Route::get('/dashboard', [DashboardController::class, 'getDashboardData'])->middleware('cache.response:15');
 
 
     Route::prefix('chat')->controller(ChatController::class)->group(function () {
-    /**
+      /**
        * Mengambil daftar semua percakapan milik pengguna (untuk sidebar).
        * GET /api/chat/conversations
        */
-      Route::get('/conversations', 'index');
+      Route::get('/conversations', 'index')->middleware('cache.response:5');
 
       /**
        * Membuat sesi percakapan BARU yang masih kosong.
@@ -51,7 +51,7 @@ Route::prefix('v1')->group(function () {
        * Mengambil seluruh riwayat pesan dari SATU percakapan spesifik.
        * GET /api/chat/conversations/{conversation:slug}
        */
-      Route::get('/conversations/{conversation:slug}', 'show');
+      Route::get('/conversations/{conversation:slug}', 'show')->middleware('cache.response:5');
 
       /**
        * Memperbarui judul percakapan yang sudah ada.
