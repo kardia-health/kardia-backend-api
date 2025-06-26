@@ -32,7 +32,7 @@ class RiskAssessmentRepository
 
     return Cache::remember($cacheKey, now()->addMinutes(15), function () use ($profile) {
       Log::info("CACHE MISS: Mengambil data dasbor dari DB untuk profil ID: {$profile->id}");
-      return $profile->riskAssessments();
+      return $profile->riskAssessments;
     });
   }
   /**
