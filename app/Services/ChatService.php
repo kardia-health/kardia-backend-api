@@ -27,7 +27,7 @@ class ChatService
       Log::critical('FATAL ERROR: GEMINI_API_KEY tidak diatur.');
       throw new \InvalidArgumentException('Konfigurasi layanan AI (Gemini API Key) tidak valid.');
     }
-    $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={$this->apiKey}";
+    $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent?key={$this->apiKey}";
   }
 
   /**
@@ -58,18 +58,6 @@ class ChatService
       throw new Exception("Maaf, saya mengalami sedikit kendala teknis saat berkomunikasi dengan asisten AI.");
     }
   }
-
-  /**
-   * Menyimpan sebuah pesan ke dalam tabel chat_messages milik sebuah percakapan.
-   */
-  // private function saveChatMessage(Conversation $conversation, string $role, string $content): void
-  // {
-  //   // Logika sekarang menyimpan pesan ke relasi milik Conversation.
-  //   $conversation->chatMessages()->create([
-  //     'role' => $role,
-  //     'content' => $content,
-  //   ]);
-  // }
 
   /**
    * Membangun konteks dari profil dan 3 hasil analisis risiko TERAKHIR.

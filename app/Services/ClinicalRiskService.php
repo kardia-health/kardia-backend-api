@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\UserProfile;
 use Carbon\Carbon;
 use Exception;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Class ClinicalRiskService

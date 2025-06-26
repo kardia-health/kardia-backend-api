@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUserProfileRequest;
 use App\Http\Resources\UserProfileResource;
 use App\Models\UserProfile;
-use App\Repositories\UserProfileRepository; // <-- Impor Repository
+use App\Repositories\UserProfileRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

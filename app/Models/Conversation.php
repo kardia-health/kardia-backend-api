@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -42,5 +43,13 @@ class Conversation extends Model
     public function chatMessages(): HasMany
     {
         return $this->hasMany(ChatMessage::class);
+    }
+
+    public function scopeWithLastMessage(Builder $query): void
+    {
+        $query->with(['chatMessages' => function ($q) {
+            // Hanya muat 1 pesan, yaitu yang paling baru
+            $q->latest()->limit(1);
+        }]);
     }
 }

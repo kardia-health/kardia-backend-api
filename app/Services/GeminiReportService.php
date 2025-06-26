@@ -7,7 +7,6 @@ use App\Models\UserProfile;
 use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-
 use Illuminate\Support\Facades\Log;
 use JsonException;
 
@@ -25,7 +24,7 @@ class GeminiReportService
   {
     $this->apiKey = config('services.gemini.api_key');
     // Gunakan model yang kuat untuk pemahaman konteks dan generasi JSON yang kompleks.
-    $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key={$this->apiKey}";
+    $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent?key={$this->apiKey}";
   }
 
   /**
@@ -166,7 +165,7 @@ Berdasarkan SEMUA data di atas, hasilkan laporan komprehensif dalam format JSON 
     "riskSummary": {
       "riskPercentage": "{{float}}",
       "riskCategory": {
-        "code": "{{LOW|MODERATE|HIGH|VERY_HIGH}}",
+        "code": "{{LOW_MODERATE|HIGH|VERY_HIGH}}",
         "title": "{{Risiko Rendah/Tinggi/dll}}",
       },
       "executiveSummary": "{{2-3 kalimat menyebutkan persentase + 1-2 faktor utama}}",

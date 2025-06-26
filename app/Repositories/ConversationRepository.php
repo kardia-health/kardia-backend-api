@@ -2,9 +2,9 @@
 
 namespace App\Repositories;
 
-use App\Http\Resources\ConversationListResource;
 use App\Models\Conversation;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 
@@ -13,14 +13,16 @@ class ConversationRepository
   /**
    * Mengambil daftar percakapan pengguna, dengan caching.
    */
-  public function getUserConversations(User $user): JsonResponse
+  public function getUserConversations(User $user): Collection
   {
     $cacheKey = "user:{$user->id}:conversations_list";
 
     // Ambil dari cache. Jika tidak ada, jalankan fungsi dan simpan hasilnya selama 10 menit.
     return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($user) {
       return $user->profile->conversations()
-        ->with('chatMessages:id,conversation_id,content,created_at')
+        ->with(['chatMessages' => function ($query) {
+          $query->latest(); // Eager load pesan terakhir untuk snippet
+        }])
         ->latest('updated_at')
         ->get();
     });

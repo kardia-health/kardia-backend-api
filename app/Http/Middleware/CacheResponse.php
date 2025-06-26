@@ -25,7 +25,7 @@ class CacheResponse
             $user = $request->user();
             // Jika tidak ada user (rute publik), gunakan IP. Jika ada, gunakan ID user.
             $identifier = $user ? "user:{$user->id}" : "ip:{$request->ip()}";
-            $cacheKey = "http_response:{$identifier}:" . md5($request->fullUrl());
+            $cacheKey = "http_response:{$identifier}:" . $request->path();
 
             // Gunakan Cache::remember untuk mengambil atau menyimpan respons
             return Cache::remember($cacheKey, now()->addMinutes($minutes), function () use ($request, $next, $cacheKey) {

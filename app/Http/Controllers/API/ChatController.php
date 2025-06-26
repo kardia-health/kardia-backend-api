@@ -23,8 +23,7 @@ class ChatController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        // Cukup panggil repository, caching sudah ditangani di dalamnya.
-        return $this->conversationRepository->getUserConversations($request->user());
+        $conversations = $this->conversationRepository->getUserConversations($request->user());
         return ConversationListResource::collection($conversations)->response();
     }
 
@@ -35,7 +34,7 @@ class ChatController extends Controller
         $userMessage = $request->input('message');
 
         $conversation = $user->profile->conversations()->create([
-            'title' => 'Percakapan: ' . Str::limit($userMessage, 40),
+            'title' => Str::limit($userMessage, 40),
             'slug' => Str::ulid(),
         ]);
 
@@ -61,7 +60,7 @@ class ChatController extends Controller
     {
         if ($request->user()->profile->id !== $conversation->user_profile_id) abort(403);
 
-    // ... (validasi message) ...
+        // ... (validasi message) ...
 
         $aiReply = $this->chatService->getChatResponse($request->input('message'), $request->user(), $conversation);
 
