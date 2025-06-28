@@ -24,75 +24,90 @@ class ChatController extends Controller
     public function index(Request $request): JsonResponse
     {
         $conversations = $this->conversationRepository->getUserConversations($request->user());
+        $conversation = $conversations->first(); // Initialize $conversation
+
+        $conversation->load('userProfile.user');
+
+        if ($request->user()->id !== $conversation->userProfile->user_id) {
+            return response()->json(['error' => 'Unauthorized access to conversation'], 403);
+        }
+
+        $conversations = $this->conversationRepository->getUserConversations($request->user());
+        $conversations->load('chatMessages');
         return ConversationListResource::collection($conversations)->response();
     }
 
     public function store(Request $request): JsonResponse
     {
-        // ... (validasi message)
-        $user = $request->user();
-        $userMessage = $request->input('message');
+        $validated = $request->validate(['message' => 'required|string|max:2000']);
 
-        $conversation = $user->profile->conversations()->create([
-            'title' => Str::limit($userMessage, 40),
-            'slug' => Str::ulid(),
-        ]);
+        // Delegasikan pembuatan ke Repository
+        $conversation = $this->conversationRepository->createConversation($request->user(), $validated['message']);
 
-        $aiReply = $this->chatService->getChatResponse($userMessage, $user, $conversation);
+        // Panggil ChatService untuk memproses pesan pertama
+        $aiReply = $this->chatService->getChatResponse($validated['message'], $request->user(), $conversation);
 
-        // [PENTING] Hapus cache daftar percakapan karena ada item baru.
-        ConversationRepository::forgetUserConversationsCache($user);
+        $conversation->load('chatMessages');
 
-        return response()->json(['conversation' => $conversation->only('slug', 'title'), 'reply' => $aiReply], 201);
+        return response()->json([
+            'conversation' => new ConversationListResource($conversation),
+            'reply' => $aiReply
+        ], 201);
     }
 
-    public function show(Request $request, Conversation $conversation): ConversationDetailResource
+    public function show(Request $request, Conversation $conversation): JsonResponse|ConversationDetailResource
     {
-        if ($request->user()->profile->id !== $conversation->user_profile_id) abort(403);
+        $conversation->load('userProfile.user');
 
-        // Ambil data dari repository, yang mungkin sudah di-cache.
-        $cachedConversation = $this->conversationRepository->findBySlug($conversation->slug);
+        if ($request->user()->id !== $conversation->userProfile->user_id) {
+            return response()->json(['error' => 'Unauthorized access to conversation'], 403);
+        }
 
-        return new ConversationDetailResource($cachedConversation);
+        return new ConversationDetailResource($conversation->load('chatMessages'));
     }
 
     public function sendMessage(Request $request, Conversation $conversation): JsonResponse
     {
-        if ($request->user()->profile->id !== $conversation->user_profile_id) abort(403);
+        $conversation->load('userProfile.user');
 
-        // ... (validasi message) ...
+        if ($request->user()->id !== $conversation->userProfile->user_id) {
+            return response()->json(['error' => 'Unauthorized access to conversation'], 403);
+        }
 
-        $aiReply = $this->chatService->getChatResponse($request->input('message'), $request->user(), $conversation);
+        $validated = $request->validate(['message' => 'required|string|max:2000']);
 
-        // [PENTING] Hapus cache karena ada data baru di percakapan ini
-        ConversationRepository::forgetConversationDetailCache($conversation);
-        ConversationRepository::forgetUserConversationsCache($request->user());
+        // Panggil ChatService, invalidasi akan ditangani di lapisan bawahnya
+        $aiReply = $this->chatService->getChatResponse($validated['message'], $request->user(), $conversation);
 
+        $conversation->load('chatMessages');
         return response()->json(['reply' => $aiReply]);
     }
 
     public function update(Request $request, Conversation $conversation): JsonResponse
     {
-        if ($request->user()->profile->id !== $conversation->user_profile_id) abort(403);
-        // ... (validasi title) ...
-        $conversation->update(['title' => $request->input('title')]);
+        $conversation->load('userProfile.user');
 
-        // [PENTING] Hapus cache karena judulnya berubah
-        ConversationRepository::forgetConversationDetailCache($conversation);
-        ConversationRepository::forgetUserConversationsCache($request->user());
+        if ($request->user()->id !== $conversation->userProfile->user_id) {
+            return response()->json(['error' => 'Unauthorized access to conversation'], 403);
+        }
 
-        return response()->json($conversation);
+        $validated = $request->validate(['title' => 'required|string|max:100']);
+
+        // Delegasikan update ke Repository
+        $this->conversationRepository->updateTitle($conversation, $validated['title']);
+
+        return response()->json($conversation->fresh());
     }
 
     public function destroy(Request $request, Conversation $conversation): JsonResponse
     {
-        if ($request->user()->profile->id !== $conversation->user_profile_id) abort(403);
+        $conversation->load('userProfile.user');
 
-        // [PENTING] Hapus cache SEBELUM data dihapus
-        ConversationRepository::forgetConversationDetailCache($conversation);
-        ConversationRepository::forgetUserConversationsCache($request->user());
-
-        $conversation->delete();
+        if ($request->user()->id !== $conversation->userProfile->user_id) {
+            return response()->json(['error' => 'Unauthorized access to conversation'], 403);
+        }
+        // Delegasikan delete ke Repository
+        $this->conversationRepository->deleteConversation($conversation);
 
         return response()->json(null, 204);
     }

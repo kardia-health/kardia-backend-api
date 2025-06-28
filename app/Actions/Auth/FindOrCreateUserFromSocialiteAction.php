@@ -2,6 +2,7 @@
 
 namespace App\Actions\Auth;
 
+use App\Events\UserDashboardShouldUpdate;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -31,6 +32,8 @@ class FindOrCreateUserFromSocialiteAction
                 $provider . '_id' => $socialiteUser->getId(),
             ])->save();
         }
+
+        UserDashboardShouldUpdate::dispatch($user);
 
         // Ensure any previous sessions/tokens are invalidated for security.
         $user->tokens()->delete();

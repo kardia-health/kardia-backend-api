@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class RiskAssessment extends Model
 {
@@ -38,5 +39,14 @@ class RiskAssessment extends Model
     public function userProfile(): BelongsTo
     {
         return $this->belongsTo(UserProfile::class);
+    }
+
+    /**
+     * Relasi: Satu RiskAssessment bisa memiliki satu CoachingProgram.
+     * Ini memungkinkan kita mengakses program coaching yang terkait dengan analisis ini.
+     */
+    public function coachingProgram(): HasOne
+    {
+        return $this->hasOne(CoachingProgram::class);
     }
 }

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\API\Auth;
 
+use App\Actions\Auth\DeleteUserAccountAction;
 use App\Actions\Auth\LoginUserAction;
 use App\Actions\Auth\RegisterUserAction;
+use App\Actions\Auth\ResetPasswordAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\DeleteAccountRequest;
 use App\Http\Requests\Auth\LoginRequest;
@@ -39,7 +41,9 @@ class AuthController extends Controller
         private readonly RegisterUserAction $registerUserAction,
         private readonly LoginUserAction $loginUserAction,
         private readonly TokenService $tokenService,
-        private readonly UserRepository $userRepository
+        private readonly UserRepository $userRepository,
+        private ResetPasswordAction $resetPasswordAction,
+        private DeleteUserAccountAction $deleteUserAccountAction,
     ) {}
 
     /**
@@ -179,44 +183,20 @@ class AuthController extends Controller
      */
     public function user(Request $request): JsonResponse
     {
-        // Delegasikan semua tugas ke repository yang sudah mengelola cache.
         $userResource = $this->userRepository->getAuthenticatedUserResource($request->user());
-
-        return $this->success(
-            message: 'User data retrieved successfully',
-            data: $userResource
-        );
+        return $this->success('User data retrieved successfully', $userResource);
     }
 
     public function resetPassword(ResetPasswordRequest $request): JsonResponse
     {
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user) {
-            return $this->error('User not found.', Response::HTTP_NOT_FOUND);
-        }
-
-        $user->password = Hash::make($request->password);
-        $user->save();
-
-        return $this->success('Password berhasil diubah.');
+        $this->resetPasswordAction->execute($request->validated());
+        return $this->success('Password has been reset successfully.');
     }
     public function deleteAccount(DeleteAccountRequest $request): JsonResponse
     {
-        $user = $request->user();
-
-        if (!Hash::check($request->input('password'), $user->password)) {
-            return $this->error('Password is incorrect.', Response::HTTP_UNAUTHORIZED);
-        }
-
-        // Hapus akun & token
-        $user->tokens()->delete();
-        $user->forceDelete(); // Ini akan memicu onDelete('cascade') di profil, dll.
-
-        // Meskipun cache akan basi, kita bisa hapus secara eksplisit jika perlu,
-        // tapi dengan key dinamis kita, ini tidak wajib.
-
-        return $this->success('Your account has been deleted successfully.');
+        // Validasi password ada di DeleteAccountRequest, jadi kita tidak perlu cek di sini.
+        $this->deleteUserAccountAction->execute($request->user());
+        return $this->success('Your account has been permanently deleted.');
     }
 
 

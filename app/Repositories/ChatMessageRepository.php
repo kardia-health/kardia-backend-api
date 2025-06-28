@@ -2,6 +2,7 @@
 
 namespace App\Repositories;
 
+use App\Events\UserDashboardShouldUpdate;
 use App\Models\Conversation;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -16,7 +17,7 @@ class ChatMessageRepository
   {
     $cacheKey = "conversation:{$conversation->slug}:messages";
     // Cache riwayat pesan selama 1 jam
-    return Cache::remember($cacheKey, now()->addHours(1), function () use ($conversation, $limit) {
+    return Cache::remember($cacheKey, now()->addMinutes(2), function () use ($conversation, $limit) {
       Log::info("CACHE MISS: Mengambil pesan untuk percakapan slug: {$conversation->slug}");
       return $conversation->chatMessages()->latest()->take($limit)->get()->reverse();
     });
@@ -25,25 +26,27 @@ class ChatMessageRepository
   /**
    * Membuat pesan baru dan menghapus cache yang relevan.
    */
-  public function createMessage(Conversation $conversation, string $role, string $content): void
+  public function createMessage(Conversation $conversation, string $role, string|array $content): void
   {
-    $conversation->chatMessages()->create([
-      'role' => $role,
-      'content' => $content,
-    ]);
+    $contentToStore = is_array($content) ? json_encode($content) : $content;
+    $conversation->chatMessages()->create(['role' => $role, 'content' => $contentToStore]);
 
-    // Hapus cache detail percakapan ini karena ada pesan baru
-    $this->forgetConversationCache($conversation);
+    // Hapus cache yang menjadi tanggung jawabnya sendiri
+    $this->forgetMessagesCache($conversation);
+
+    // [BEST PRACTICE] Teriakkan pengumuman bahwa ada aktivitas baru dari pengguna ini.
+    // Biarkan para Listener yang membersihkan cache lain yang relevan.
+    UserDashboardShouldUpdate::dispatch($conversation->userProfile->user);
   }
 
+
   /**
-   * Helper untuk menghapus cache detail percakapan.
+   * Helper untuk menghapus cache riwayat pesan untuk SATU thread.
    */
-  public function forgetConversationCache(Conversation $conversation): void
+  private function forgetMessagesCache(Conversation $conversation): void
   {
     $cacheKey = "conversation:{$conversation->slug}:messages";
     Cache::forget($cacheKey);
-    // Juga hapus cache daftar percakapan karena 'updated_at' berubah
-    Cache::forget("user:{$conversation->userProfile->user->id}:conversations_list");
+    Log::info("CACHE FORGET: Cache pesan dihapus untuk thread slug: {$conversation->slug}");
   }
 }

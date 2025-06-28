@@ -9,17 +9,12 @@ use Illuminate\Support\Facades\Log;
 
 class UserRepository
 {
-    /**
-     * Mengambil data pengguna yang sudah diformat, dengan prioritas dari cache.
-     */
     public function getAuthenticatedUserResource(User $user): UserResource
     {
-        // Kunci cache unik untuk data resource pengguna ini.
-        // Kita tambahkan timestamp dari profil untuk invalidasi otomatis saat profil di-update.
-        $profileTimestamp = $user->profile ? $user->profile->updated_at->timestamp : 'no-profile';
-        $cacheKey = "user:{$user->id}:resource:{$profileTimestamp}";
+        // Kunci cache sekarang bisa lebih sederhana
+        $cacheKey = "user:{$user->id}:resource";
 
-        // Simpan di cache selama 24 jam. Jika profil di-update, cache ini otomatis basi.
+        // Gunakan cache biasa tanpa tags
         return Cache::remember($cacheKey, now()->addHours(24), function () use ($user) {
             Log::info("CACHE MISS: Mengambil UserResource dari DB untuk user ID: {$user->id}");
 
@@ -29,14 +24,19 @@ class UserRepository
     }
 
     /**
-     * Helper untuk menghapus cache resource pengguna.
-     * Dipanggil saat akun dihapus.
+     * [DIREFAKTOR] Helper untuk menghapus cache yang berhubungan dengan pengguna ini.
      */
-    public static function forgetUserResourceCache(User $user): void
+    public function forgetUserCache(User $user): void
     {
-        // Karena key kita dinamis dengan timestamp, cara termudah adalah dengan tag
-        // Namun untuk simplisitas, kita bisa biarkan cache basi secara alami
-        // atau menggunakan cara yang lebih advanced seperti Cache Tags jika perlu.
-        // Untuk sekarang, invalidasi eksplisit tidak diperlukan karena key dinamis.
+        // Hapus cache satu per satu berdasarkan key
+        $cacheKeys = [
+            "user:{$user->id}:resource",
+            // Tambahkan key lain yang berhubungan dengan user ini jika ada
+        ];
+
+        foreach ($cacheKeys as $key) {
+            Cache::forget($key);
+            Log::info("CACHE FORGOTTEN: Cache key '{$key}' telah dihapus.");
+        }
     }
 }

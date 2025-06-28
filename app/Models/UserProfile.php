@@ -49,6 +49,15 @@ class UserProfile extends Model
     }
 
     /**
+     * Relasi: Satu profil bisa memiliki banyak program coaching.
+     * Ini memungkinkan kita mengakses semua program yang terkait dengan profil ini.
+     */
+    public function coachingPrograms(): HasMany
+    {
+        return $this->hasMany(CoachingProgram::class);
+    }
+
+    /**
      * [BARU] Atribut dinamis untuk secara otomatis mendapatkan risk_region.
      * Ini memungkinkan kita memanggil $profile->risk_region di mana saja.
      *

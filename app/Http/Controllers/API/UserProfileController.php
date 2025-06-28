@@ -7,13 +7,18 @@ use App\Http\Requests\StoreUserProfileRequest;
 use App\Http\Resources\UserProfileResource;
 use App\Models\UserProfile;
 use App\Repositories\UserProfileRepository;
+use App\Repositories\UserRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class UserProfileController extends Controller
 {
     // Inject repository melalui konstruktor
-    public function __construct(private UserProfileRepository $profileRepository) {}
+    public function __construct(
+        private UserProfileRepository $profileRepository,
+        private UserRepository $userRepository
+        
+        ) {}
 
     /**
      * Menampilkan profil milik pengguna yang sedang terotentikasi.
@@ -40,18 +45,16 @@ class UserProfileController extends Controller
      */
     public function update(StoreUserProfileRequest $request): JsonResponse
     {
-        $validatedData = $request->validated();
-        $user = $request->user();
-
-        $profile = UserProfile::updateOrCreate(
-            ['user_id' => $user->id],
-            $validatedData
+        $profile = $this->profileRepository->updateOrCreateForUser(
+            $request->user(),
+            $request->validated()
         );
+
+        $this->userRepository->forgetUserCache($request->user());
 
         return response()->json([
             'message' => 'Profile updated successfully!',
-            // Kita bungkus dengan resource untuk memastikan formatnya konsisten
-            'data' => new UserProfileResource($profile->load('user'))
+            'data' => new UserProfileResource($profile)
         ]);
     }
 }

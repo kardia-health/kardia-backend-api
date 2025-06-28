@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\KardiaRiskRequest;
 use App\Models\RiskAssessment;
 use App\Models\UserProfile;
-use App\Repositories\RiskAssessmentRepository; // <-- Impor Repository
+use App\Repositories\RiskAssessmentRepository;
 use App\Services\ClinicalRiskService;
 use App\Services\GeminiReportService;
 use Illuminate\Http\JsonResponse;
@@ -63,13 +63,17 @@ class KardiaController extends Controller
      */
     public function generatePersonalizedReport(Request $request, RiskAssessment $assessment): JsonResponse
     {
+        $user = $request->user();
+
         // Otorisasi: Pastikan pengguna hanya bisa mengakses analisis miliknya
-        if ($request->user()->profile->id !== $assessment->user_profile_id) {
+        if ($user->profile->id !== $assessment->user_profile_id) {
             abort(403, 'Unauthorized action.');
         }
+        $profile = UserProfile::findAndCache($user->profile->id);
+
 
         // 1. Dapatkan laporan dari Service Gemini
-        $fullReport = $this->reportGenerator->getFullReport($request->user()->profile, $assessment);
+        $fullReport = $this->reportGenerator->getFullReport($profile, $assessment);
 
         // 2. Delegasikan update data & invalidasi cache ke Repository
         $this->assessmentRepository->updateWithGeminiReport($assessment, $fullReport);

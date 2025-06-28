@@ -5,11 +5,81 @@ namespace App\Repositories;
 use App\Models\Conversation;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
+
 
 class ConversationRepository
 {
+  /**
+   * [BARU] Membuat percakapan baru dan langsung menghapus cache yang relevan.
+   */
+  public function createConversation(User $user, string $userMessage): Conversation
+  {
+    $conversation = $user->profile->conversations()->create([
+      'role' => 'user',
+      'title' => Str::limit($userMessage, 45),
+      'slug' => Str::ulid(),
+    ]);
+
+    // Invalidasi terjadi secara otomatis di sini
+    $this->forgetUserConversationsCache($user);
+
+    return $conversation;
+  }
+
+  /**
+   * [BARU] Mengupdate judul dan menghapus semua cache yang relevan.
+   */
+  public function updateTitle(Conversation $conversation, string $newTitle): bool
+  {
+    $result = $conversation->update(['title' => $newTitle]);
+    if ($result) {
+      $this->invalidateRelatedCaches($conversation);
+    }
+    return $result;
+  }
+
+  /**
+   * [BARU] Menghapus percakapan dan menghapus semua cache yang relevan.
+   */
+  public function deleteConversation(Conversation $conversation): bool
+  {
+    // Panggil invalidasi SEBELUM menghapus, selagi kita masih punya datanya
+    $this->invalidateRelatedCaches($conversation);
+    return $conversation->delete();
+  }
+
+  // --- KUMPULAN HELPER INVALIDASI CACHE ---
+
+  /**
+   * [DIUBAH MENJADI PRIVATE] Helper untuk menghapus cache daftar percakapan.
+   */
+  public function forgetUserConversationsCache(User $user): void
+  {
+    $cacheKey = "user:{$user->id}:conversations_list";
+    Cache::forget($cacheKey);
+  }
+
+  /**
+   * [DIUBAH MENJADI PRIVATE] Helper untuk menghapus cache detail percakapan.
+   */
+  private function forgetConversationDetailCache(Conversation $conversation): void
+  {
+    $cacheKey = "conversation_detail:{$conversation->slug}"; // Sesuaikan dengan key di findBySlug
+    Cache::forget($cacheKey);
+  }
+
+  /**
+   * [BEST PRACTICE] Satu metode privat untuk memanggil semua invalidasi yang diperlukan.
+   */
+  private function invalidateRelatedCaches(Conversation $conversation): void
+  {
+    $this->forgetConversationDetailCache($conversation);
+    $this->forgetUserConversationsCache($conversation->userProfile->user);
+  }
+
+
   /**
    * Mengambil daftar percakapan pengguna, dengan caching.
    */
@@ -39,23 +109,5 @@ class ConversationRepository
       // Muat relasi pesan agar ikut ter-cache
       return Conversation::where('slug', $slug)->with('chatMessages')->first();
     });
-  }
-
-  /**
-   * Menghapus cache daftar percakapan milik seorang pengguna.
-   * Dipanggil setiap kali ada perubahan (chat baru, judul diubah, chat dihapus).
-   */
-  public static function forgetUserConversationsCache(User $user): void
-  {
-    Cache::forget("user:{$user->id}:conversations_list");
-  }
-
-  /**
-   * Menghapus cache detail dari satu percakapan spesifik.
-   * Dipanggil setiap kali ada pesan baru atau judul diubah.
-   */
-  public static function forgetConversationDetailCache(Conversation $conversation): void
-  {
-    Cache::forget("conversation:{$conversation->slug}:details");
   }
 }

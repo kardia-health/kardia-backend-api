@@ -2,6 +2,7 @@
 
 namespace App\Repositories;
 
+use App\Events\UserDashboardShouldUpdate;
 use App\Models\RiskAssessment;
 use App\Models\User;
 use App\Models\UserProfile;
@@ -24,27 +25,16 @@ class RiskAssessmentRepository
       return new Collection();
     }
 
-    // Ambil profil dari cache terlebih dahulu
-    $profile = UserProfile::findAndCache($user->profile->id);
-
-    // Kunci cache dasbor sekarang bisa lebih sederhana
-    $cacheKey = "user_profile:{$profile->id}:dashboard_assessments";
-
-    return Cache::remember($cacheKey, now()->addMinutes(15), function () use ($profile) {
-      Log::info("CACHE MISS: Mengambil data dasbor dari DB untuk profil ID: {$profile->id}");
-      return $profile->riskAssessments;
-    });
+    return $user->profile->riskAssessments()->latest()->get();
   }
   /**
    * Membuat record analisis awal dan menghapus cache dasbor.
    */
   public function createInitialAssessment(UserProfile $profile, array $calculationResult, array $validatedInputs): RiskAssessment
   {
-    // Buat slug unik di sini
-    $slug = Str::ulid();
 
     $assessment = $profile->riskAssessments()->create([
-      'slug' => $slug,
+      'slug' => Str::ulid(),
       'model_used' => $calculationResult['model_used'],
       'final_risk_percentage' => $calculationResult['calibrated_10_year_risk_percent'],
       'inputs' => $validatedInputs,
@@ -52,9 +42,7 @@ class RiskAssessmentRepository
       'result_details' => null // Laporan AI masih kosong
     ]);
 
-    // [PENTING] Langsung hapus cache dasbor karena ada data baru.
-    $this->forgetDashboardCache($profile->user);
-    Cache::forget("user:{$profile->user->id}:latest_3_assessments");
+    $this->dispatchUpdateEvents($profile->user);
 
     return $assessment;
   }
@@ -66,9 +54,10 @@ class RiskAssessmentRepository
   {
     $result = $assessment->update(['result_details' => $geminiReport]);
 
-    // [PENTING] Hapus cache lagi karena detail analisis terakhir sudah berubah.
-    $this->forgetDashboardCache($assessment->userProfile->user);
-
+    if ($result) {
+      // [BEST PRACTICE] Teriakkan event bahwa data pengguna ini telah berubah.
+      $this->dispatchUpdateEvents($assessment->userProfile->user);
+    }
     return $result;
   }
 
@@ -107,5 +96,17 @@ class RiskAssessmentRepository
   {
     Cache::forget("user:{$user->id}:latest_3_assessments");
     Log::info("CACHE FORGET: Cache 3 assessment terakhir dihapus untuk user ID: {$user->id}");
+  }
+
+  /**
+   * Helper privat untuk memicu semua invalidasi yang diperlukan.
+   */
+  private function dispatchUpdateEvents(User $user): void
+  {
+    // Hapus cache yang dikelola oleh repository ini sendiri
+    $this->forgetLatestAssessmentsCache($user);
+
+    // Teriakkan pengumuman global agar repository lain (seperti Dashboard) bisa mendengar
+    UserDashboardShouldUpdate::dispatch($user);
   }
 }
