@@ -16,13 +16,10 @@ class DailyMealGuideRepository
    */
   public function listForUser(User $user): Collection
   {
-    // ... (logika getVersionCacheKey dan $itemCacheKey tetap sama) ...
-    $version = Cache::get($this->getVersionCacheKey($user), 1);
-    $itemCacheKey = "user:{$user->id}:daily_guides:v{$version}:all";
+    $cacheKey = "user:{$user->id}:daily_guides:all";
 
-    $cachedResultAsArray = Cache::rememberForever($itemCacheKey, function () use ($user) {
-      Log::info("CACHE MISS: Mengambil SEMUA DailyMealGuide & mengonversi ke ARRAY untuk user ID: {$user->id}");
-
+    $cachedResultAsArray = Cache::rememberForever($cacheKey, function () use ($user) {
+      Log::info("CACHE MISS: Mengambil data riwayat DailyMealGuide dari DB untuk user ID: {$user->id}");
       return $user->profile
         ->dailyMealGuides()
         ->toBase()          // <-- Kunci #1: Ubah ke query builder dasar
@@ -88,12 +85,14 @@ class DailyMealGuideRepository
   }
 
   /**
-   * Helper untuk membatalkan (bust) semua cache riwayat dengan menaikkan nomor versinya.
+   * [PENDEKATAN DEBUGGING] Menghapus cache secara langsung dengan logging.
    */
   public function bustHistoryCache(User $user): void
   {
-    $versionKey = $this->getVersionCacheKey($user);
-    Cache::increment($versionKey); // Cukup naikkan versi, cache lama otomatis usang.
-    Log::info("CACHE BUSTED: Versi cache riwayat DailyMealGuide dinaikkan untuk user ID: {$user->id} (Key: {$versionKey})");
+    $cacheKey = "user:{$user->id}:daily_guides:all";
+
+    // LOG 3: Kita catat bahwa kita akan menghapus kunci ini
+    Cache::forget($cacheKey);
+    Log::info("CACHE FORGOTTEN: Cache riwayat DailyMealGuide dihapus untuk key: {$cacheKey}");
   }
 }

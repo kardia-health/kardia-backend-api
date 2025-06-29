@@ -26,31 +26,30 @@ class CulinaryService
    */
   public function generateTodaysGuide(User $user, array $dailyInputs): array
   {
-    // 1. Kumpulkan semua data konteks yang dibutuhkan dari berbagai Repository
+    // 1. Kumpulkan data, biarkan dalam bentuk objek atau null.
     $preferences = $this->preferenceRepo->get($user);
-    $todaysMission = $this->coachingRepo->findTodaysPrimaryMissionForUser($user) ?? '';
+    $todaysMission = $this->coachingRepo->findTodaysPrimaryMissionForUser($user);
     $learningHistory = $this->guideRepo->getLatestChosenGuides($user);
     $latestAssessment = $this->assessmentRepo->getLatestFourAssessmentsForUser($user)->first();
 
-
-    // 2. Rakit semua data menjadi satu paket konteks yang rapi untuk AI
+    // 2. Rakit konteks dengan aman menggunakan nullsafe operator (?->)
     $context = [
       'user_language' => $user->profile->language ?? 'id',
       'user_profile' => $user->profile,
-      'health_focus' => $latestAssessment->result_details['riskSummary']['primaryContributors'][0]['title'] ?? 'Kesehatan Jantung Umum',
-      'daily_coaching_mission' => $todaysMission->title ?? 'Menjaga pola hidup sehat secara umum.',
+      // [FIX] Jika $latestAssessment null, ?-> akan berhenti & ?? akan ambil nilai default.
+      'health_focus' => $latestAssessment?->result_details['riskSummary']['primaryContributors'][0]['title'] ?? 'Kesehatan Jantung Umum',
+      // [FIX] Jika $todaysMission null, ?-> akan berhenti & ?? akan ambil nilai default.
+      'daily_coaching_mission' => $todaysMission?->title ?? 'Menjaga pola hidup sehat secara umum.',
       'preferences' => $preferences,
       'daily_inputs' => $dailyInputs,
-      // Ubah riwayat menjadi string yang bisa dibaca AI
       'learning_history' => $learningHistory->pluck('guide_data.suggestions.*.dish_name')->flatten()->unique()->implode(', '),
       'current_meal_time' => $this->getCurrentMealTime(),
-      'user'
     ];
 
     // 3. Panggil service AI untuk mendapatkan saran menu
     $guideData = $this->geminiService->generateDailyMealGuide($context);
 
-    // 4. Simpan hasilnya ke database untuk riwayat dan pembelajaran di masa depan
+    // 4. Simpan hasilnya ke database. Baris ini sekarang PASTI tercapai.
     $this->guideRepo->saveGuide($user, $dailyInputs, $guideData);
 
     return $guideData;

@@ -18,7 +18,7 @@ class GeminiCulinaryService
     if (empty($this->apiKey)) {
       throw new \InvalidArgumentException('Konfigurasi layanan AI (Gemini API Key) tidak valid.');
     }
-    $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={$this->apiKey}";
+    $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent?key={$this->apiKey}";
   }
 
   /**
@@ -74,7 +74,7 @@ class GeminiCulinaryService
         4.  **FILTER KONTEKS HARIAN:** Lihat `Konteks Spesifik Hari Ini`. Apa keinginan pengguna? (misal: Masakan Jepang, Cepat & Praktis, Sedang Lelah). Persempit pilihan Anda hanya ke resep yang cocok.
         5.  **SELEKSI FINAL:** Dari daftar resep yang tersisa, pilih 1-3 yang paling cocok, dengan mempertimbangkan `Riwayat Pembelajaran` dan `Profil Rasa` sebagai penentu akhir.
         6.  **PENULISAN NARASI:** Untuk setiap resep terpilih, tulis `pro_tip` yang secara eksplisit menghubungkan resep tersebut dengan salah satu data konteks.
-        7. JANGAN MEREKOMENDASIKAN MAKANAN YANG TIDAK COCOK DENGAN POINT 2. PROFIL & PREFERENSI DASAR (JANGKA PANJANG) DAN POINT 3. KONTEKS SPESIFIK HARI INI (DINAMIS) MILIK PENGGUNA SAAT INI. TIDAK PERLU MEMAKSAKAN MEMBERIKAN LEBIH DARI 1
+        7. JANGAN MEREKOMENDASIKAN MAKANAN YANG TIDAK COCOK DENGAN POINT 2. PROFIL & PREFERENSI DASAR (JANGKA PANJANG) DAN POINT 3. KONTEKS SPESIFIK HARI INI (DINAMIS) MILIK PENGGUNA SAAT INI.
 
         ## 4. LARANGAN KERAS
         -   JANGAN memberikan resep, daftar bahan, atau takaran numerik.
@@ -82,6 +82,7 @@ class GeminiCulinaryService
         -   JANGAN membungkus output JSON dengan markdown (```json).
 
         ---
+        
         # DATA PENGGUNA (USER DATA)
 
         ## 1. KONTEKS KESEHATAN (TUJUAN UTAMA)
@@ -123,6 +124,14 @@ class GeminiCulinaryService
             },
           ]
         }
+
+        ---
+
+        [ATURAN BAHASA FINAL - SANGAT PENTING!]
+        PERINTAH INI ADALAH YANG PALING UTAMA, MENIMPA SEMUA ATURAN LAIN.
+        ABAIAKAN SEMUA BAHASA YANG MUNGKIN ADA DALAM DATA KONTEKS DI ATAS.
+        HASIL AKHIR WAJIB MENGGUNAKAN BAHASA TARGET.
+        BAHASA TARGET: {$language}
         PROMPT;
   }
 

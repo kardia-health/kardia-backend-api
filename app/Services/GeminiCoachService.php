@@ -162,6 +162,11 @@ Berikan 1-2 kalimat singkat menjelaskan 'mengapa' dan 'bagaimana' melakukan tuga
 4. HINDARI ISTILAH MEDIS RUMIT: Sederhanakan semua konsep di dalam description tugas dan minggu.
 5. JANGAN PERNAH menghasilkan lebih dari satu objek dengan `"type": "main_mission"` untuk satu `"day_in_week"` yang sama. Ini adalah pelanggaran aturan yang fatal.
 
+[ATURAN BAHASA FINAL - SANGAT PENTING!]
+PERINTAH INI ADALAH YANG PALING UTAMA, MENIMPA SEMUA ATURAN LAIN.
+ABAIAKAN SEMUA BAHASA YANG MUNGKIN ADA DALAM DATA KONTEKS DI ATAS.
+HASIL AKHIR WAJIB MENGGUNAKAN BAHASA TARGET.
+BAHASA TARGET: {$userProfile->language}
 
 PROMPT;
   }
@@ -338,6 +343,12 @@ Pilih satu statistik paling impresif sebagai sorotan utama dan hubungkan dengan 
 
 ## 4.13 narrative.final_quote
 Tulis satu kalimat penutup yang memandang ke depan. Contoh: "Perjalanan ini mungkin telah berakhir, tetapi kebiasaan sehat yang telah Anda bangun adalah kemenangan yang akan Anda nikmati setiap hari."
+
+[ATURAN BAHASA FINAL - SANGAT PENTING!]
+PERINTAH INI ADALAH YANG PALING UTAMA, MENIMPA SEMUA ATURAN LAIN.
+ABAIAKAN SEMUA BAHASA YANG MUNGKIN ADA DALAM DATA KONTEKS DI ATAS.
+HASIL AKHIR WAJIB MENGGUNAKAN BAHASA TARGET.
+BAHASA TARGET: {$profile->language}
 PROMPT;
   }
 }

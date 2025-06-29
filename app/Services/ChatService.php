@@ -9,7 +9,6 @@ use App\Repositories\ChatMessageRepository;
 use App\Repositories\RiskAssessmentRepository;
 use Carbon\Carbon;
 use Exception;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use JsonException;
@@ -322,6 +321,13 @@ Berdasarkan SEMUA data yang diberikan, hasilkan laporan komprehensif dalam forma
     }
   ]
 }
+
+[ATURAN BAHASA FINAL - SANGAT PENTING!]
+PERINTAH INI ADALAH YANG PALING UTAMA, MENIMPA SEMUA ATURAN LAIN.
+ABAIAKAN SEMUA BAHASA YANG MUNGKIN ADA DALAM DATA KONTEKS DI ATAS.
+HASIL AKHIR WAJIB MENGGUNAKAN BAHASA TARGET.
+BAHASA TARGET: {$language}
+
 PROMPT;
 
     $fullInstruction = <<<PROMPT

@@ -104,13 +104,15 @@ class GeminiReportService
     $originalInputsString = json_encode($assessment->inputs, JSON_PRETTY_PRINT);
 
     // 1. Dapatkan preferensi bahasa dari profil pengguna
-    $language = $userProfile->language ?? 'id'; // Default ke 'id' jika tidak ada
+    $language = $userProfile->language;
+    Log::info("Bahasa user {$language} ke Gemini untuk user ID: {$userProfile->user_id}");
+
 
     // Ambil bagian terbaik dari prompt referensi Anda (Peran, Disclaimer, Larangan)
     $systemInstructions = <<<PROMPT
 # BAGIAN 1: INSTRUKSI SISTEM 
-PERINTAH PALING MUTLAK: PADA KEY DAN VALUE, UNTUK VALUE PASTIKAN BAHASA YANG DIGUNAKAN ADALAH BAHASA YANG DIGUNAKAN OLEH USER, JANGAN MENGGUNAKAN SELAIN YANG DIGUNAKAN OLEH USER. INI MUTLAK
-BAHASA YANG DIGUNAKAN ADALAH BAHASA {$language}
+PERINTAH PALING MUTLAK
+PADA KEY DAN VALUE, UNTUK VALUE PASTIKAN BAHASA YANG DIGUNAKAN ADALAH BAHASA YANG DIGUNAKAN OLEH USER. INI MUTLAK, BAHASA YANG KAMU GUNAKAN ADALAH BAHASA USER, YAITU BAHASA {$language}. APABILA BAHAHA USER ADALAH en, MAKA GUNAKAN BAHASA INGGRIS. APABILA BAHASA USER ADALAH id, MAKA GUNAKAN BAHASA INDONESIA. JANGAN PERNAH MENGGUNAKAN BAHASA LAIN SELAIN BAHASA USER.
 
 ## 1.1 PERAN ANDA
 Anda adalah 'Kardia AI', seorang asisten analis kesehatan kardiovaskular AI yang berempati, berbasis data, dan komunikatif. Persona Anda adalah seorang ahli yang sangat berpengetahuan, namun juga seorang sahabat yang peduli, hangat, dan memotivasi. Anda berbicara dengan bahasa Indonesia yang baik, jelas, dan mudah dimengerti oleh orang awam.
@@ -301,6 +303,12 @@ Jangan memasukkan seperti "Fakta:" atau "Mitos:" dalam kalimatnya
 ## 4.12. closingStatement
 - **motivationalMessage:** positif, meyakinkan bahwa perubahan bisa dimulai dari sekarang.
 - **firstStepAction:** sederhana, mudah dilakukan minggu ini.
+
+[ATURAN BAHASA FINAL - SANGAT PENTING!]
+PERINTAH INI ADALAH YANG PALING UTAMA, MENIMPA SEMUA ATURAN LAIN.
+ABAIAKAN SEMUA BAHASA YANG MUNGKIN ADA DALAM DATA KONTEKS DI ATAS.
+HASIL AKHIR WAJIB MENGGUNAKAN BAHASA TARGET.
+BAHASA TARGET: {$language}
 
 PROMPT;
 
