@@ -48,7 +48,7 @@ class ChatCoachService
 
       // 5. Simpan balasan AI (tidak berubah)
       // [PERBAIKAN] Mengganti role dari 'ai_coach' menjadi 'model' agar konsisten dengan API
-      $this->messageRepository->createMessage($thread, 'ai_coach', json_encode($aiReplyArray));
+      $this->messageRepository->createMessage($thread, 'model', json_encode($aiReplyArray));
 
       return $aiReplyArray;
     } catch (\Throwable $e) {

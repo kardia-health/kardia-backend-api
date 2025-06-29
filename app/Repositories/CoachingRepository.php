@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Events\UserDashboardShouldUpdate;
 use App\Models\CoachingProgram;
+use App\Models\CoachingTask;
 use App\Models\RiskAssessment;
 use App\Models\User;
 use App\Services\GeminiCoachService;
@@ -123,7 +124,6 @@ class CoachingRepository
 
 
     $program->update(['status' => 'paused']);
-    return $program; // Ensure the method returns the updated CoachingProgram object
     $this->forgetActiveProgramCache($user);
     $this->forgetProgramDetailCache($program); // Hapus juga cache detailnya
     $this->invalidateAllUserCaches($user);
@@ -436,5 +436,39 @@ class CoachingRepository
     // Memicu event untuk memberitahu repository lain (seperti Dashboard)
     UserDashboardShouldUpdate::dispatch($user);
     Log::info("EVENT DISPATCH: UserDashboardShouldUpdate dikirim untuk user: {$user->id}");
+  }
+
+  /**
+   * [VERSI FINAL & AMAN]
+   * Menemukan satu misi utama (primary) yang relevan untuk hari ini
+   * dari program coaching yang sedang aktif, dengan penanganan kasus kosong.
+   */
+  public function findTodaysPrimaryMissionForUser(User $user): ?CoachingTask
+  {
+    // Langkah 1: Gunakan kembali metode yang sudah ada untuk mencari program aktif
+    $activeProgram = $this->findActiveProgramForUser($user);
+
+    // Langkah 2: Jika tidak ada program aktif, maka tidak mungkin ada misi.
+    if (!$activeProgram) {
+      return null;
+    }
+
+    // Langkah 3: Ambil semua ID minggu dari program aktif
+    $weekIds = $activeProgram->weeks->pluck('id');
+
+    // [FIX UTAMA UNTUK ERROR HY093]
+    // Cek apakah collection weekIds kosong. Jika ya, program ini tidak punya
+    // minggu, jadi tidak mungkin punya tugas. Langsung hentikan proses di sini
+    // untuk mencegah Laravel membuat query dengan parameter yang tidak valid.
+    if ($weekIds->isEmpty()) {
+      return null;
+    }
+
+    // Langkah 4: Jika kita sampai sini, artinya $weekIds PASTI berisi sesuatu.
+    // Query sekarang 100% aman untuk dibuat.
+    return CoachingTask::whereIn('coaching_week_id', $weekIds) // `whereIn` lebih eksplisit
+      ->whereDate('task_date', Carbon::today())
+      ->where('task_type', 'main_mission') // Gunakan tipe yang benar sesuai enum
+      ->first();
   }
 }

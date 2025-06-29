@@ -4,6 +4,7 @@ use App\Http\Controllers\API\Auth\AuthController;
 use App\Http\Controllers\API\Auth\SocialiteController;
 use App\Http\Controllers\API\ChatController;
 use App\Http\Controllers\API\CoachingController;
+use App\Http\Controllers\API\CulinaryController;
 use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\KardiaController;
 use App\Http\Controllers\API\UserProfileController;
@@ -150,6 +151,17 @@ Route::prefix('v1')->group(function () {
        * [GET] /api/coaching/programs/{program:slug}/graduation-report
        */
       Route::get('/programs/{program:slug}/graduation-report', 'showGraduationReport');
+    });
+
+    Route::prefix('culinary')->controller(CulinaryController::class)->group(function () {
+      // [BARU] Satu endpoint untuk mengambil semua data Halaman Hub
+      Route::get('/hub-data', 'getHubData');
+
+      // Endpoint untuk menyimpan preferensi tetap sama
+      Route::patch('/preferences', 'updatePreferences');
+
+      // Endpoint untuk generate menu tetap sama
+      Route::post('/daily-guides', 'generateDailyGuide');
     });
   });
 });

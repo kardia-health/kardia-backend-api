@@ -11,11 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('coaching_messages', function (Blueprint $table) {
+        Schema::create('daily_meal_guides', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('coaching_thread_id')->constrained()->onDelete('cascade');
-            $table->enum('role', ['user', 'model']);
-            $table->json('content');
+            $table->foreignId('user_profile_id')->constrained()->onDelete('cascade');
+            $table->date('guide_date');
+            $table->json('generation_context');
+            $table->json('guide_data');
+            $table->boolean('is_chosen')->default(false);
             $table->timestamps();
         });
     }
@@ -25,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('coaching_messages');
+        Schema::dropIfExists('daily_meal_guides');
     }
 };

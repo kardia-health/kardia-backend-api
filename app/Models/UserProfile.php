@@ -23,6 +23,11 @@ class UserProfile extends Model
         'sex',
         'country_of_residence',
         'language',
+        'culinary_preferences'
+    ];
+
+    protected $casts = [
+        'culinary_preferences' => 'array',
     ];
 
     /**
@@ -55,6 +60,11 @@ class UserProfile extends Model
     public function coachingPrograms(): HasMany
     {
         return $this->hasMany(CoachingProgram::class);
+    }
+
+    public function dailyMealGuides(): HasMany
+    {
+        return $this->hasMany(DailyMealGuide::class);
     }
 
     /**

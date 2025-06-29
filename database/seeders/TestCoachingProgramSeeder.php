@@ -284,9 +284,9 @@ class TestCoachingProgramSeeder extends Seeder
 
         // Buat beberapa sample messages
         $messages = [
-            ['role' => 'ai_coach', 'content' => ['text' => 'Selamat datang di program coaching Anda! Saya akan membantu Anda mencapai tujuan kesehatan.']],
+            ['role' => 'model', 'content' => ['text' => 'Selamat datang di program coaching Anda! Saya akan membantu Anda mencapai tujuan kesehatan.']],
             ['role' => 'user', 'content' => ['text' => 'Terima kasih! Saya siap memulai program ini.']],
-            ['role' => 'ai_coach', 'content' => ['text' => 'Bagus! Mari kita mulai dengan mengatur rutinitas harian Anda.']],
+            ['role' => 'model', 'content' => ['text' => 'Bagus! Mari kita mulai dengan mengatur rutinitas harian Anda.']],
         ];
 
         foreach ($messages as $msgData) {
