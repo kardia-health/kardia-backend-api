@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\CoachingProgram;
 use App\Models\CoachingThread;
 use App\Models\User;
 use App\Repositories\CoachingMessageRepository; // Akan kita buat/gunakan
 use App\Repositories\RiskAssessmentRepository;
 use Carbon\Carbon;
 use Exception;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use JsonException;
@@ -29,32 +31,34 @@ class ChatCoachService
     $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent?key={$this->apiKey}";
   }
 
-  /**
-   * Metode utama untuk menangani pesan dalam konteks coaching.
-   */
   public function getCoachReply(string $userMessage, User $user, CoachingThread $thread): array
   {
     try {
-      // 1. Simpan pesan pengguna ke thread yang benar via Repository
+      // 1. Simpan pesan pengguna (tidak berubah)
       $this->messageRepository->createMessage($thread, 'user', $userMessage);
 
-      // 2. Kumpulkan semua konteks relevan
-      $userContext = $this->buildUserContext($user);
-      $chatHistoryContext = $this->buildChatHistoryContext($thread);
-      $programContext = $this->buildProgramContext($thread->program);
+      // 2. Bangun instruksi sistem (konstitusi, profil, & konteks program)
+      $systemInstruction = $this->buildSystemInstruction($user, $thread->program);
 
-      // 3. Rakit prompt lengkap
-      $prompt = $this->buildPrompt($user, $userMessage, $userContext, $programContext, $chatHistoryContext);
+      // 3. Bangun array riwayat percakapan
+      $contents = $this->buildContentsArray($thread, $userMessage);
 
-      // 4. Panggil Gemini
-      $aiReplyArray = $this->getGeminiChatCompletion($prompt);
+      // 4. Panggil Gemini dengan struktur payload yang benar
+      $aiReplyArray = $this->getGeminiChatCompletion($systemInstruction, $contents);
 
-      // 5. Simpan balasan AI ke thread yang sama via Repository
+      // 5. Simpan balasan AI (tidak berubah)
+      // [PERBAIKAN] Mengganti role dari 'ai_coach' menjadi 'model' agar konsisten dengan API
       $this->messageRepository->createMessage($thread, 'ai_coach', json_encode($aiReplyArray));
 
       return $aiReplyArray;
     } catch (\Throwable $e) {
-      Log::error('ChatCoachService failed', ['error' => $e->getMessage()]);
+      Log::error('ChatCoachService failed', [
+        'error' => $e->getMessage(),
+        'user_id' => $user->id,
+        'thread_id' => $thread->id,
+        'trace' => substr($e->getTraceAsString(), 0, 2000)
+      ]);
+      // Disarankan memiliki fallback response yang lebih spesifik untuk coach
       throw new Exception("Maaf, terjadi kendala pada Asisten Pelatih AI kami.");
     }
   }
@@ -70,7 +74,7 @@ class ChatCoachService
     $age = Carbon::parse($profile->date_of_birth)->age;
     $context = "PROFIL PENGGUNA:\n- Nama: {$profile->first_name}\n- Usia: {$age} tahun\n- Jenis Kelamin: {$profile->sex}\n";
 
-    $assessments = $this->assessmentRepository->getLatestThreeForUser($user);
+    $assessments = $this->assessmentRepository->getLatestFourAssessmentsForUser($user);
     if ($assessments->isNotEmpty()) {
       $context .= "\nRIWAYAT 3 ANALISIS RISIKO TERAKHIR:\n";
       foreach ($assessments as $assessment) {
@@ -82,73 +86,93 @@ class ChatCoachService
     return $context;
   }
 
-  private function buildProgramContext(\App\Models\CoachingProgram $program): string
+  /**
+   * [PERBAIKAN] Memperkaya konteks program secara masif dengan detail dari migrasi.
+   * AI kini tahu tujuan program, tingkat kesulitan, deskripsi mingguan,
+   * dan yang terpenting, deskripsi detail dari setiap tugas harian.
+   */
+  private function buildProgramContext(CoachingProgram $program): string
   {
-    // Mulai dengan informasi dasar program
-    $context = "KONTEKS PROGRAM COACHING SAAT INI:\n";
-    $context .= "- Nama Program: {$program->title}\n";
-    $context .= "- Status Program: {$program->status}\n";
+    // --- Bagian 1: Konteks Keseluruhan Program ---
+    $totalWeeks = $program->weeks()->count(); // Hitung total minggu untuk info progres
+    $endDateFormatted = Carbon::parse($program->end_date)->isoFormat('D MMMM YYYY');
 
-    // --- Logika Cerdas untuk Menentukan Minggu dan Tugas Saat Ini ---
+    // Menggunakan HEREDOC untuk keterbacaan yang lebih baik
+    $context = <<<PROGRAM
+KONTEKS PROGRAM COACHING SAAT INI:
+- Nama Program: {$program->title}
+- Tujuan Utama Program: {$program->description}
+- Tingkat Kesulitan: {$program->difficulty}
+- Status Program: {$program->status}
+- Tanggal Selesai Program: {$endDateFormatted}
 
-    // 1. Hitung minggu ke berapa saat ini secara dinamis
-    $programStartDate = \Carbon\Carbon::parse($program->start_date)->startOfDay();
-    $today = \Carbon\Carbon::now()->startOfDay();
+PROGRAM;
+
+    // --- Bagian 2: Logika Cerdas untuk Konteks Mingguan & Harian ---
+    $programStartDate = Carbon::parse($program->start_date)->startOfDay();
+    $today = Carbon::now()->startOfDay();
+
+    // Memastikan kita tidak menghitung hari sebelum program dimulai
+    if ($today->isBefore($programStartDate)) {
+      $context .= "INFO: Program ini akan dimulai pada " . $programStartDate->isoFormat('D MMMM YYYY') . ".\n";
+      return rtrim($context);
+    }
+
     $daysPassed = $today->diffInDays($programStartDate, false);
     $currentWeekNumber = floor($daysPassed / 7) + 1;
 
-    // 2. Ambil data untuk minggu saat ini dari database
+    // Eager load relasi tasks untuk efisiensi query
     $currentWeek = $program->weeks()->with('tasks')->where('week_number', $currentWeekNumber)->first();
 
-    // 3. Bangun string konteks jika kita berada dalam periode minggu yang valid
+    // --- Bagian 3: Bangun String Konteks jika Program Sedang Aktif ---
     if ($currentWeek) {
-      $context .= "- Sedang di Minggu ke-{$currentWeek->week_number}: {$currentWeek->title}\n\n";
+      $context .= "\nKONTEKS MINGGU INI (Minggu {$currentWeek->week_number} dari {$totalWeeks}):\n";
+      $context .= "- Fokus Minggu Ini: {$currentWeek->title}\n";
+      $context .= "- Deskripsi Fokus: {$currentWeek->description}\n\n";
       $context .= "JADWAL LENGKAP MINGGU INI:\n";
 
-      $todayDayOfWeek = now()->dayOfWeekIso; // 1 untuk Senin, 7 untuk Minggu
-
-      // Loop melalui semua tugas di minggu ini untuk membuat agenda
+      // Loop melalui semua tugas di minggu ini untuk membuat agenda detail
       foreach ($currentWeek->tasks->sortBy('task_date') as $task) {
-        // Gunakan Carbon untuk memformat tanggal tugas menjadi nama hari
-        $taskDateCarbon = \Carbon\Carbon::parse($task->task_date);
-
-        $dayName = $taskDateCarbon->translatedFormat('l, d M'); // "Rabu, 26 Jun"
-        $marker = ($taskDateCarbon->isToday()) ? " (HARI INI)" : "";
-        $status = $task->is_completed ? " [✓ Selesai]" : "";
+        $taskDateCarbon = Carbon::parse($task->task_date);
+        $dayName = $taskDateCarbon->translatedFormat('l, d M');
+        $marker = $taskDateCarbon->isToday() ? " (HARI INI)" : "";
+        $status = $task->is_completed ? " [✓ Selesai]" : " [□ Belum]";
         $type = ($task->task_type === 'main_mission') ? "Misi Utama" : "Tantangan Bonus";
 
         $context .= "- {$dayName}{$marker} ({$type}): {$task->title}{$status}\n";
+        // [TAMBAHAN PALING PENTING] Menambahkan deskripsi detail tugas
+        $context .= "  - Deskripsi Tugas: {$task->description}\n";
       }
       $context .= "\n";
 
-      // 4. Berikan AI "bocoran" tentang fokus minggu depan
+      // Berikan "bocoran" tentang fokus minggu depan
       $nextWeek = $program->weeks()->where('week_number', $currentWeekNumber + 1)->first();
       if ($nextWeek) {
         $context .= "FOKUS MINGGU DEPAN (Minggu ke-{$nextWeek->week_number}): {$nextWeek->title}\n";
       } else {
-        $context .= "INFO: Ini adalah minggu terakhir dari program Anda.\n";
+        $context .= "INFO: Ini adalah minggu terakhir dari program Anda. Mari selesaikan dengan baik!\n";
       }
     } else {
-      $context .= "INFO: Program saat ini tidak dalam periode minggu aktif, atau telah selesai.\n";
+      // Jika sudah lewat dari total minggu, anggap selesai
+      if ($currentWeekNumber > $totalWeeks && $totalWeeks > 0) {
+        $context .= "INFO: Program coaching ini telah selesai. Pengguna sedang dalam tahap pasca-program.\n";
+      } else {
+        $context .= "INFO: Program saat ini tidak dalam periode minggu aktif.\n";
+      }
     }
 
     return rtrim($context);
   }
 
-  private function buildChatHistoryContext(CoachingThread $thread): string
+  private function buildSystemInstruction(User $user, CoachingProgram $program): array
   {
-    $messages = $this->messageRepository->getLatestMessages($thread, 10); // Ambil 6 pesan terakhir
-    if ($messages->isEmpty()) return "Ini adalah awal dari diskusi di thread ini.";
+    $userContext = $this->buildUserContext($user); // Helper untuk profil user
+    $programContext = $this->buildProgramContext($program); // Helper untuk info program coaching
+    $language = $user->profile->language ?? 'id';
 
-    $history = "RIWAYAT PERCAKAPAN DI THREAD INI:\n";
-    // ... (logika formatting chat history Anda yang sudah bagus) ...
-    return $history;
-  }
-
-  private function buildPrompt(User $user, string $userMessage, string $userContext, string $programContext, string $chatHistoryContext): string
-  {
+    $today = now()->translatedFormat('l, d MMMM YYYY');
     $language = $user->profile->language;
-    $constitution = <<<PROMPT
+    $fullInstruction = <<<PROMPT
 # BAGIAN 1: PERAN, PERSONA, DAN MISI ANDA (KONSTITUSI COACHING)
 PERINTAH PALING MUTLAK: PADA KEY DAN VALUE, UNTUK VALUE PASTIKAN BAHASA YANG DIGUNAKAN ADALAH BAHASA YANG DIGUNAKAN OLEH USER, JANGAN MENGGUNAKAN SELAIN YANG DIGUNAKAN OLEH USER. INI MUTLAK
 BAHASA YANG DIGUNAKAN ADALAH BAHASA {$language}
@@ -190,7 +214,7 @@ Ini adalah prinsip-prinsip coaching Anda.
 ---
 
 # ATURAN TAMBAHAN TENTANG WAKTU
-- Hari ini adalah: {now()->translatedFormat('l, d MMMM YYYY')}.
+- Hari ini adalah: {$today}.
 - Jika pengguna bertanya tentang "hari ini", "besok", "lusa", atau hari lain, lihat dan sebutkan misi dari "JADWAL LENGKAP MINGGU INI".
 - Jika pengguna bertanya tentang "minggu depan", jawab berdasarkan informasi dari "FOKUS MINGGU DEPAN".
 - Jika tidak ada jadwal spesifik untuk hari yang ditanyakan, katakan dengan jujur. Jangan mengarang misi baru.
@@ -215,49 +239,91 @@ Berdasarkan SEMUA data yang diberikan, hasilkan balasan dalam format JSON yang v
 }
 
 ---
-
+# KONTEKS PROGRAM COACHING SAAT INI
+{$programContext}
+---
+# KONTEKS PENGGUNA YANG MENJALANI PROGRAM
+{$userContext}
 PROMPT;
 
-    return <<<PROMPT
-{$constitution}
----
-# KONTEKS LENGKAP PENGGUNA SAAT INI
-{$userContext} {$programContext}
----
-# RIWAYAT PERCAKAPAN TERAKHIR
-{$chatHistoryContext}
----
-# PERTANYAAN BARU DARI PENGGUNA
-"{$userMessage}"
----
-# JAWABAN ANDA:
-PROMPT;
+    return ['parts' => [['text' => $fullInstruction]]];
   }
 
 
-  private function getGeminiChatCompletion(string $prompt): array
+  private function buildContentsArray(CoachingThread $thread, string $newUserMessage): array
   {
-    $certificatePath = config('filesystems.certificate_path');
-    // Logika ini tetap sama
-    $response = Http::withOptions([
-      'verify' => $certificatePath
-    ]) // Ganti 'false' dengan path sertifikat di produksi
-      ->timeout(300)
-      ->post($this->apiUrl, [
-        'contents' => [['parts' => [['text' => $prompt]]]],
+    $contents = [];
+    $messages = $this->messageRepository->getLatestMessages($thread, 20);
+
+    foreach ($messages as $message) {
+      // [PERBAIKAN] Menyesuaikan 'role' agar sesuai dengan standar API ('user' atau 'model')
+      $role = ($message->role === 'user') ? 'user' : 'model';
+
+      // Logika untuk mengekstrak teks dari balasan AI yang disimpan sebagai JSON
+      $content = $message->content;
+      if ($role === 'model') {
+        $decoded = json_decode($content, true);
+        if (json_last_error() === JSON_ERROR_NONE && isset($decoded['reply_components'][0]['content'])) {
+          $content = $decoded['reply_components'][0]['content'];
+        } else {
+          $content = '[Pesan dari Coach]';
+        }
+      }
+
+      $contents[] = [
+        'role' => $role,
+        'parts' => [['text' => $content]]
+      ];
+    }
+
+    // Menambahkan pesan baru dari pengguna di akhir array
+    $contents[] = [
+      'role' => 'user',
+      'parts' => [['text' => $newUserMessage]]
+    ];
+
+    return $contents;
+  }
+
+
+
+  private function getGeminiChatCompletion(array $systemInstruction, array $contents): array
+  {
+    try {
+      $payload = [
+        'system_instruction' => $systemInstruction,
+        'contents' => $contents,
         'generationConfig' => [
           'temperature' => 0.7,
           'response_mime_type' => 'application/json',
+          'maxOutputTokens' => 8192,
         ],
-      ]);
+      ];
 
-    if ($response->successful() && isset($response->json()['candidates'][0]['content']['parts'][0]['text'])) {
-      $geminiTextResponse = $response->json()['candidates'][0]['content']['parts'][0]['text'];
+      Log::info('Making Gemini API call (Coach) with multi-turn structure.');
+
+      $response = Http::withOptions(['verify' => config('filesystems.certificate_path', false)])
+        ->timeout(60)
+        ->retry(2, 1000)
+        ->post($this->apiUrl, $payload);
+
+      if (!$response->successful()) {
+        Log::error("Gemini API call (Coach) failed", ['status' => $response->status(), 'response' => $response->body()]);
+        throw new Exception("Layanan AI Coach mengembalikan error: " . $response->status());
+      }
+
+      $responseData = $response->json();
+      if (!isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
+        throw new Exception("Format respons dari layanan AI Coach tidak sesuai.");
+      }
+      $geminiTextResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
+
       return $this->parseAndCleanGeminiResponse($geminiTextResponse);
+    } catch (ConnectionException $e) {
+      throw new Exception("Gagal terhubung ke layanan AI Coach.");
+    } catch (\Throwable $e) {
+      throw new Exception("Terjadi kesalahan pada layanan AI Coach: " . $e->getMessage());
     }
-
-    Log::error("Gemini API call failed.", ['response' => $response->body()]);
-    throw new Exception("Gagal mendapatkan balasan dari layanan AI.");
   }
 
   /**

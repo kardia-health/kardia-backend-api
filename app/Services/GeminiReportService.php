@@ -252,9 +252,9 @@ Tentukan berdasarkan USIA dan PERSENTASE RISIKO pengguna:
   - ≥ 10% → VERY_HIGH
 
 - **Usia ≥ 70**:
-  - < 10% → MODERATE
-  - 10 - 19.99% → HIGH
-  - ≥ 20% → VERY_HIGH
+  - < 7.5% → MODERATE
+  - 7.5% - 14.99% → HIGH
+  - ≥ 15% → VERY_HIGH
 
 ## 4.2. executiveSummary
 Sebutkan kategori risiko dan persentase, lalu jelaskan dalam 2-3 kalimat empatik yang mengaitkan 1–2 penyebab utama dari jawaban pengguna.

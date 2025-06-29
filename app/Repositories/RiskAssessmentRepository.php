@@ -73,18 +73,18 @@ class RiskAssessmentRepository
    * [BARU] Mengambil 3 riwayat analisis terakhir untuk seorang pengguna, dengan caching.
    * Ini akan digunakan oleh ChatService dan service lain yang butuh riwayat.
    */
-  public function getLatestThreeForUser(User $user): Collection
+  public function getLatestFourAssessmentsForUser(User $user): Collection
   {
     if (!$user->profile) {
       return new Collection(); // Kembalikan koleksi kosong jika profil tidak ada
     }
 
-    $cacheKey = "user:{$user->id}:latest_3_assessments";
+    $cacheKey = "user:{$user->id}:latest_4_assessments";
 
     // Simpan di cache selama 1 jam
     return Cache::remember($cacheKey, now()->addHours(1), function () use ($user) {
-      Log::info("CACHE MISS: Mengambil 3 assessment terakhir dari DB untuk user ID: {$user->id}");
-      return $user->profile->riskAssessments()->latest()->take(3)->get();
+      Log::info("CACHE MISS: Mengambil 4 assessment terakhir dari DB untuk user ID: {$user->id}");
+      return $user->profile->riskAssessments()->latest()->take(4)->get();
     });
   }
 

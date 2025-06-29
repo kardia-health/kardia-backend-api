@@ -32,17 +32,11 @@ class ChatService
   }
 
   /**
-   * Metode utama untuk menangani pesan pengguna dalam sebuah percakapan SPESIFIK.
-   * @param string $userMessage Pesan baru dari pengguna.
-   * @param User $user Pengguna yang sedang terotentikasi.
-   * @param Conversation $conversation Sesi percakapan yang sedang aktif.
-   * @return array Balasan AI yang sudah terstruktur.
-   * @throws Exception
+   * Metode utama untuk menangani pesan pengguna.
    */
   public function getChatResponse(string $userMessage, User $user, Conversation $conversation): array
   {
     try {
-      // Validasi input parameters
       if (empty(trim($userMessage))) {
         throw new Exception("Pesan tidak boleh kosong.");
       }
@@ -51,118 +45,38 @@ class ChatService
         throw new Exception("Data pengguna atau percakapan tidak valid.");
       }
 
-      // Delegasikan penyimpanan ke repository
-      $userMessageRecord = $this->chatMessageRepository->createMessage($conversation, 'user', $userMessage);
+      // Tetap simpan pesan user ke database terlebih dahulu
+      $this->chatMessageRepository->createMessage($conversation, 'user', $userMessage);
 
-      if (!$userMessageRecord) {
-        Log::error("Failed to save user message", [
-          'user_id' => $user->id,
-          'conversation_id' => $conversation->id,
-          'message_length' => strlen($userMessage)
-        ]);
-        // Ganti line 63 di ChatService dengan kode ini:
-        try {
-          Log::info('Attempting to save user message', [
-            'conversation_id' => $conversation->id,
-            'message' => $userMessage
-          ]);
+      // [PERBAIKAN] Alur utama diubah untuk memanggil metode-metode baru yang lebih terstruktur.
+      // Logika tidak lagi membangun satu string raksasa, melainkan memanggil helper
+      // untuk instruksi sistem dan riwayat chat secara terpisah.
+      Log::info("Generating new Gemini reply for conversation ID: {$conversation->id} using Multi-turn approach.");
 
-          $userMessage = $conversation->chatMessages()->create([
-            'role' => 'user',
-            'content' => $userMessage
-          ]);
+      // 1. Bangun instruksi sistem yang berisi aturan dan profil pengguna.
+      $systemInstruction = $this->buildSystemInstruction($user);
 
-          Log::info('User message saved successfully', [
-            'message_id' => $userMessage->id
-          ]);
-        } catch (\Exception $e) {
-          Log::error('DETAILED ERROR saving user message', [
-            'error' => $e->getMessage(),
-            'conversation_exists' => $conversation->exists,
-            'conversation_id' => $conversation->id,
-            'fillable_fields' => (new \App\Models\ChatMessage())->getFillable(),
-            'sql_state' => $e->getCode()
-          ]);
-          throw new \Exception('Gagal menyimpan pesan pengguna: ' . $e->getMessage());
-        }
-      }
+      // 2. Bangun array percakapan yang berisi histori dan pertanyaan baru.
+      $contents = $this->buildContentsArray($conversation, $userMessage);
 
-      // [BARU] Buat kunci cache unik berdasarkan pesan pengguna
-      $cacheKey = "gemini_reply:conv:{$conversation->id}:" . md5($userMessage);
+      // 3. Panggil API Gemini dengan struktur baru yang lebih efisien.
+      $aiReplyArray = $this->getGeminiChatCompletion($systemInstruction, $contents);
 
-      // [BARU] Gunakan Cache::remember untuk proses yang mahal
-      $aiReplyArray = Cache::remember($cacheKey, now()->addHours(1), function () use ($userMessage, $user, $conversation) {
-        // --- Blok ini hanya berjalan jika jawaban tidak ada di cache ---
-        Log::info("CACHE MISS: Generating new Gemini reply for conversation ID: {$conversation->id}");
-
-        try {
-          $userContext = $this->buildUserContext($user);
-          $chatHistoryContext = $this->buildChatHistoryContext($conversation);
-          $prompt = $this->buildPrompt($user, $userMessage, $userContext, $chatHistoryContext);
-
-          // Validasi prompt length (Gemini has limits)
-          if (strlen($prompt) > 30000) { // Adjust limit as needed
-            Log::warning("Prompt too long, truncating", [
-              'original_length' => strlen($prompt),
-              'user_id' => $user->id,
-              'conversation_id' => $conversation->id
-            ]);
-            // Truncate or optimize prompt here if needed
-          }
-
-          // Panggilan mahal ke Gemini
-          return $this->getGeminiChatCompletion($prompt);
-        } catch (\Throwable $e) {
-          // Log detailed error for cache callback
-          Log::error('Error in cache callback during Gemini API call', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'user_id' => $user->id,
-            'conversation_id' => $conversation->id
-          ]);
-
-          // Re-throw to be caught by outer try-catch
-          throw $e;
-        }
-      });
-
-      // Validasi response sebelum menyimpan
       if (!is_array($aiReplyArray) || empty($aiReplyArray)) {
-        Log::error("Invalid AI response structure", [
-          'response' => $aiReplyArray,
-          'type' => gettype($aiReplyArray)
-        ]);
         throw new Exception("Format respons AI tidak valid.");
       }
 
-      // Delegasikan penyimpanan balasan AI ke repository
-      $aiMessageRecord = $this->chatMessageRepository->createMessage($conversation, 'model', json_encode($aiReplyArray));
-
-      if (!$aiMessageRecord) {
-        Log::error("Failed to save AI response", [
-          'user_id' => $user->id,
-          'conversation_id' => $conversation->id,
-          'response_size' => strlen(json_encode($aiReplyArray))
-        ]);
-        // Don't throw here since we have the response, just log the error
-      }
+      // Tetap simpan balasan model ke database
+      $this->chatMessageRepository->createMessage($conversation, 'model', json_encode($aiReplyArray));
 
       return $aiReplyArray;
     } catch (\Throwable $e) {
-      // Enhanced error logging
       Log::error('ChatService getChatResponse failed', [
         'error_message' => $e->getMessage(),
-        'error_line' => $e->getLine(),
-        'error_file' => $e->getFile(),
         'user_id' => $user->id ?? 'unknown',
         'conversation_id' => $conversation->id ?? 'unknown',
-        'message_preview' => substr($userMessage ?? '', 0, 100),
-        'trace' => $e->getTraceAsString()
+        'trace' => substr($e->getTraceAsString(), 0, 2000)
       ]);
-
-
-
-      // Return a fallback response instead of throwing
       return $this->getFallbackResponse($e);
     }
   }
@@ -217,20 +131,82 @@ class ChatService
         return "Profil pengguna tidak ditemukan.";
       }
 
+      // [PERBAIKAN] Memperkaya data profil sesuai dengan skema database
       $age = $profile->date_of_birth ? Carbon::parse($profile->date_of_birth)->age : 'Tidak diketahui';
-      $context = "PROFIL PENGGUNA:\n- Nama: {$profile->first_name}\n- Usia Saat Ini: {$age} tahun\n- Jenis Kelamin: {$profile->sex}\n";
 
+      // Menggabungkan nama depan dan belakang, menangani jika nama belakang kosong
+      $fullName = trim("{$profile->first_name} {$profile->last_name}");
+
+      // Menggunakan null coalescing operator (??) untuk keamanan jika data kosong
+      $sex = $profile->sex ?? 'Tidak diketahui';
+      $country = $profile->country_of_residence ?? 'Tidak diketahui';
+      $language = $profile->language ?? 'id';
+
+      // Menyusun konteks dengan format yang lebih rapi dan informasi yang lebih lengkap
+      $context = <<<CONTEXT
+      PROFIL PENGGUNA:
+      - Nama Lengkap: {$fullName}
+      - Usia Saat Ini: {$age} tahun
+      - Jenis Kelamin: {$sex}
+      - Negara Tempat Tinggal: {$country}
+      - Bahasa Utama: {$language}
+      CONTEXT;
       // Ambil data dari repository, yang sudah di-cache
-      $assessments = $this->riskAssessmentRepository->getLatestThreeForUser($user);
+      $assessments = $this->riskAssessmentRepository->getLatestFourAssessmentsForUser($user);
 
       if ($assessments && $assessments->isNotEmpty()) {
-        $context .= "\n## RIWAYAT 3 ANALISIS RISIKO TERAKHIR\n";
+        $context .= "\n## RIWAYAT 4 ANALISIS RISIKO TERAKHIR\n";
+        // [PERBAIKAN UTAMA] Loop ini sekarang akan mengekstrak lebih banyak data
         foreach ($assessments as $assessment) {
-          $date = Carbon::parse($assessment->created_at)->isoFormat('D MMM YYYY');
-          $riskCategory = $assessment->result_details['riskSummary']['riskCategory']['title'] ?? 'N/A';
+          $date = Carbon::parse($assessment->created_at)->isoFormat('D MMMM YYYY');
+          $details = $assessment->result_details ?? []; // Ambil root dari JSON
+
+          // --- Mulai bagian baru yang lebih kaya ---
+
           $context .= "\n### Analisis pada: {$date}\n";
-          $context .= "- Persentase Risiko: {$assessment->final_risk_percentage}%\n";
-          $context .= "- Kategori Risiko: {$riskCategory}\n";
+
+          // 1. Ambil Executive Summary (Ringkasan utama)
+          $executiveSummary = $details['riskSummary']['executiveSummary'] ?? null;
+          if ($executiveSummary) {
+            $context .= "- **Ringkasan:** {$executiveSummary}\n";
+          }
+
+          // 2. Ambil Faktor Risiko Utama (Primary Contributors)
+          $primaryContributors = $details['riskSummary']['primaryContributors'] ?? [];
+          if (!empty($primaryContributors)) {
+            $context .= "- **Faktor Risiko Utama:**\n";
+            foreach ($primaryContributors as $contributor) {
+              $title = $contributor['title'] ?? 'N/A';
+              $severity = $contributor['severity'] ?? 'N/A';
+              $context .= "  - {$title} (Tingkat: {$severity})\n";
+            }
+          }
+
+          // 3. Ambil Faktor Positif
+          $positiveFactors = $details['riskSummary']['positiveFactors'] ?? [];
+          if (!empty($positiveFactors)) {
+            $context .= "- **Faktor Positif yang Sudah Baik:**\n";
+            foreach ($positiveFactors as $factor) {
+              $context .= "  - {$factor}\n";
+            }
+          }
+
+          // 4. Ambil Rencana Aksi Prioritas (Paling penting untuk konteks)
+          $priorityActions = $details['actionPlan']['priorityLifestyleActions'] ?? [];
+          if (!empty($priorityActions)) {
+            $context .= "- **Rencana Aksi yang Direkomendasikan:**\n";
+            foreach ($priorityActions as $action) {
+              $title = $action['title'] ?? 'N/A';
+              $desc = $action['description'] ?? 'N/A';
+              $context .= "  - **{$title}:** {$desc}\n";
+            }
+          }
+
+          // 5. Ambil Saran Konsultasi Medis
+          $consultation = $details['actionPlan']['medicalConsultation']['recommendationLevel']['description'] ?? null;
+          if ($consultation) {
+            $context .= "- **Saran Konsultasi Medis:** {$consultation}\n";
+          }
         }
       } else {
         $context .= "\nPengguna ini belum pernah melakukan analisis risiko.";
@@ -246,55 +222,52 @@ class ChatService
     }
   }
 
+
   /**
-   * Membangun konteks HANYA dari percakapan yang sedang aktif.
+   * [PERBAIKAN] Metode baru ini menggantikan 'buildChatHistoryContext'.
+   * Tujuannya adalah membangun array 'contents' yang terstruktur, bukan string.
+   * Ini adalah cara yang benar untuk memberitahu model mengenai alur percakapan.
    */
-  private function buildChatHistoryContext(Conversation $conversation): string
+  private function buildContentsArray(Conversation $conversation, string $newUserMessage): array
   {
-    try {
-      // Ambil data dari repository, yang sudah di-cache
-      $messages = $this->chatMessageRepository->getLatestMessages($conversation, 10);
+    $contents = [];
+    $messages = $this->chatMessageRepository->getLatestMessages($conversation, 20);
 
-      if (!$messages || $messages->isEmpty()) {
-        return "Ini adalah awal dari percakapan kita.";
-      }
+    foreach ($messages as $message) {
+      $role = $message->role;
+      $content = $message->content;
 
-      $history = "RIWAYAT PERCAKAPAN DI THREAD INI:\n";
-      foreach ($messages as $message) {
-        $role = ($message->role === 'user') ? 'Pengguna' : 'Anda (Kardia)';
-
-        // Cek jika konten adalah JSON, coba decode untuk tampilan lebih baik
-        $content = json_decode($message->content, true);
-        if (json_last_error() === JSON_ERROR_NONE && isset($content['reply_components'])) {
-          // Jika balasan AI tersimpan sebagai JSON, kita ambil paragraf pertama saja untuk konteks
-          $historyContent = $content['reply_components'][0]['content'] ?? '[Balasan terstruktur]';
+      // Jika peran adalah 'model', kita ekstrak teks dari JSON untuk dimasukkan ke histori
+      if ($role === 'model') {
+        $decoded = json_decode($content, true);
+        if (json_last_error() === JSON_ERROR_NONE && isset($decoded['reply_components'][0]['content'])) {
+          $content = $decoded['reply_components'][0]['content'];
         } else {
-          $historyContent = $message->content;
+          $content = '[Balasan terstruktur]';
         }
-
-        // Truncate very long messages for context
-        if (strlen($historyContent) > 200) {
-          $historyContent = substr($historyContent, 0, 200) . '...';
-        }
-
-        $history .= "{$role}: {$historyContent}\n";
       }
 
-      return rtrim($history);
-    } catch (\Throwable $e) {
-      Log::error('Error building chat history context', [
-        'error' => $e->getMessage(),
-        'conversation_id' => $conversation->id
-      ]);
-      return "Terjadi kesalahan saat memuat riwayat percakapan.";
+      $contents[] = [
+        'role' => $role,
+        'parts' => [['text' => $content]]
+      ];
     }
+
+    // Terakhir, tambahkan pesan baru dari pengguna sebagai elemen terakhir array
+    $contents[] = [
+      'role' => 'user',
+      'parts' => [['text' => $newUserMessage]]
+    ];
+
+    return $contents;
   }
 
   /**
    * Merakit semua konteks menjadi satu Master Prompt final.
    */
-  private function buildPrompt(User $user, string $userMessage, string $userContext, string $chatHistoryContext): string
+  private function buildSystemInstruction(User $user): array
   {
+    $userContext = $this->buildUserContext($user);
     $language = $user->profile->language ?? 'Indonesian';
 
     // Menggunakan Konstitusi v12.1 yang sudah kita sempurnakan
@@ -351,93 +324,60 @@ Berdasarkan SEMUA data yang diberikan, hasilkan laporan komprehensif dalam forma
 }
 PROMPT;
 
-    return <<<PROMPT
-{$constitution}
----
-# KONTEKS LENGKAP PENGGUNA SAAT INI
-{$userContext}
----
-# RIWAYAT PERCAKAPAN TERAKHIR
-{$chatHistoryContext}
----
-# PERTANYAAN BARU DARI PENGGUNA
-"{$userMessage}"
----
-# JAWABAN ANDA:
-PROMPT;
+    $fullInstruction = <<<PROMPT
+    {$constitution}
+    ---
+    # KONTEKS LENGKAP PENGGUNA SAAT INI
+    {$userContext}
+    PROMPT;
+
+    return ['parts' => [['text' => $fullInstruction]]];
   }
 
   /**
-   * Melakukan panggilan ke API chat Gemini.
+   * [PERBAIKAN] Metode ini diubah untuk menerima $systemInstruction dan $contents.
+   * Payload yang dikirim ke API kini menggunakan struktur multi-turn yang direkomendasikan.
    */
-  private function getGeminiChatCompletion(string $prompt): array
+  private function getGeminiChatCompletion(array $systemInstruction, array $contents): array
   {
     try {
-      $certificatePath = config('filesystems.certificate_path');
+      // [PERBAIKAN] Ini adalah struktur payload baru yang menjadi inti dari perbaikan.
+      // 'system_instruction' untuk konteks permanen, dan 'contents' untuk alur chat.
+      $payload = [
+        'system_instruction' => $systemInstruction,
+        'contents' => $contents,
+        'generationConfig' => [
+          'temperature' => 0.7,
+          'response_mime_type' => 'application/json',
+          'maxOutputTokens' => 8192,
+        ],
+      ];
 
-      Log::info('Making Gemini API call', [
-        'prompt_length' => strlen($prompt),
-        'api_url' => $this->apiUrl
-      ]);
+      Log::info('Making Gemini API call with multi-turn structure.');
 
-      $response = Http::withOptions([
-        'verify' => $certificatePath ?: false // Use certificate path or disable verification
-      ])
-        ->timeout(60) // Reduced timeout for faster failure detection
-        ->retry(2, 1000) // Retry twice with 1 second delay
-        ->post($this->apiUrl, [
-          'contents' => [['parts' => [['text' => $prompt]]]],
-          'generationConfig' => [
-            'temperature' => 0.7,
-            'response_mime_type' => 'application/json',
-            'maxOutputTokens' => 4096, // Add token limit
-          ],
-        ]);
+      $response = Http::withOptions(['verify' => config('filesystems.certificate_path', false)])
+        ->timeout(60)
+        ->retry(2, 1000)
+        ->post($this->apiUrl, $payload);
 
-      // Enhanced response validation
       if (!$response->successful()) {
-        Log::error("Gemini API call failed with HTTP error", [
-          'status' => $response->status(),
-          'response' => $response->body(),
-          'headers' => $response->headers()
-        ]);
+        Log::error("Gemini API call failed", ['status' => $response->status(), 'response' => $response->body()]);
         throw new Exception("Layanan AI mengembalikan error HTTP: " . $response->status());
       }
 
       $responseData = $response->json();
 
       if (!isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
-        Log::error("Invalid Gemini API response structure", [
-          'response' => $responseData
-        ]);
-        throw new Exception("Format respons dari layanan AI tidak sesuai yang diharapkan.");
+        Log::error("Invalid Gemini API response structure", ['response' => $responseData]);
+        throw new Exception("Format respons dari layanan AI tidak sesuai.");
       }
 
       $geminiTextResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
 
-      if (empty($geminiTextResponse)) {
-        Log::error("Empty response from Gemini API");
-        throw new Exception("Layanan AI mengembalikan respons kosong.");
-      }
-
       return $this->parseAndCleanGeminiResponse($geminiTextResponse);
-    } catch (\Illuminate\Http\Client\ConnectionException $e) {
-      Log::error("Gemini API connection failed", [
-        'error' => $e->getMessage()
-      ]);
-      throw new Exception("Gagal terhubung ke layanan AI. Periksa koneksi internet Anda.");
-    } catch (\Illuminate\Http\Client\RequestException $e) {
-      Log::error("Gemini API request failed", [
-        'error' => $e->getMessage(),
-        'response' => $e->response ? $e->response->body() : 'No response'
-      ]);
-      throw new Exception("Gagal mengirim permintaan ke layanan AI.");
     } catch (\Throwable $e) {
-      Log::error("Unexpected error in Gemini API call", [
-        'error' => $e->getMessage(),
-        'trace' => $e->getTraceAsString()
-      ]);
-      throw new Exception("Terjadi kesalahan tidak terduga saat berkomunikasi dengan layanan AI.");
+      Log::error("Unexpected error in Gemini API call", ['error' => $e->getMessage()]);
+      throw new Exception("Terjadi kesalahan saat berkomunikasi dengan layanan AI: " . $e->getMessage());
     }
   }
 
