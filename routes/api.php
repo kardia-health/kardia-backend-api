@@ -23,7 +23,6 @@ Route::prefix('v1')->group(function () {
   Route::patch('/reset-password', [AuthController::class, 'resetPassword']);
 
   // Logout account 
-  Route::post('logout', [AuthController::class, 'logout'])->name('api.logout');
 
   // Delete account
   Route::delete('/delete-account', [AuthController::class, 'deleteAccount'])->name('api.delete-account');
@@ -35,6 +34,8 @@ Route::prefix('v1')->group(function () {
   Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [UserProfileController::class, 'show']);
     Route::patch('/profile', [UserProfileController::class, 'update']);
+    Route::post('logout', [AuthController::class, 'logout'])->name('api.logout');
+
 
     // Endpoint untuk memulai analisis & mendapatkan skor numerik CEPAT
     Route::post('/risk-assessments', [KardiaController::class, 'startAssessment']);
