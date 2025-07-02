@@ -20,8 +20,11 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        // 'http://localhost:5173',
-        '*'
+        'https://kardia.my.id',          // Domain produksi Vercel Anda
+        'https://kardia.vercel.app',
+        'https://www.kardia.my.id',
+        'http://localhost:5173',         // Untuk development lokal (sesuaikan port jika berbeda)
+        'http://127.0.0.1:5173',       // Untuk development lokal
     ],
 
     'allowed_origins_patterns' => [],
@@ -32,6 +35,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 ];

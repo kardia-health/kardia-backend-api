@@ -10,6 +10,7 @@ use App\Repositories\ConversationRepository;
 use App\Services\ChatService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 
@@ -24,11 +25,22 @@ class ChatController extends Controller
     public function index(Request $request): JsonResponse
     {
         $conversations = $this->conversationRepository->getUserConversations($request->user());
-        $conversation = $conversations->first(); // Initialize $conversation
+        $conversation = $conversations->first();
+
+        if (!$conversation) {
+            return ConversationListResource::collection($conversations)->response();
+        }
 
         $conversation->load('userProfile.user');
 
-        if ($request->user()->id !== $conversation->userProfile->user_id) {
+        // ==== TAMBAHKAN BLOK INI ====
+        Log::info('DEBUGGING AUTH:', [
+            'Authenticated User ID' => $request->user()->id,
+            'Conversation Owner User ID' => $conversation->userProfile->user_id
+        ]);
+        // ============================
+
+        if ($request->user()->id != $conversation->userProfile->user_id) {
             return response()->json(['error' => 'Unauthorized access to conversation'], 403);
         }
 
@@ -59,7 +71,7 @@ class ChatController extends Controller
     {
         $conversation->load('userProfile.user');
 
-        if ($request->user()->id !== $conversation->userProfile->user_id) {
+        if ($request->user()->id != $conversation->userProfile->user_id) {
             return response()->json(['error' => 'Unauthorized access to conversation'], 403);
         }
 
@@ -70,7 +82,7 @@ class ChatController extends Controller
     {
         $conversation->load('userProfile.user');
 
-        if ($request->user()->id !== $conversation->userProfile->user_id) {
+        if ($request->user()->id != $conversation->userProfile->user_id) {
             return response()->json(['error' => 'Unauthorized access to conversation'], 403);
         }
 
@@ -87,7 +99,7 @@ class ChatController extends Controller
     {
         $conversation->load('userProfile.user');
 
-        if ($request->user()->id !== $conversation->userProfile->user_id) {
+        if ($request->user()->id != $conversation->userProfile->user_id) {
             return response()->json(['error' => 'Unauthorized access to conversation'], 403);
         }
 
@@ -103,7 +115,7 @@ class ChatController extends Controller
     {
         $conversation->load('userProfile.user');
 
-        if ($request->user()->id !== $conversation->userProfile->user_id) {
+        if ($request->user()->id != $conversation->userProfile->user_id) {
             return response()->json(['error' => 'Unauthorized access to conversation'], 403);
         }
         // Delegasikan delete ke Repository

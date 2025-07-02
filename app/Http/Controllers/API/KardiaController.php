@@ -11,6 +11,7 @@ use App\Services\ClinicalRiskService;
 use App\Services\GeminiReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class KardiaController extends Controller
 {
@@ -61,27 +62,58 @@ class KardiaController extends Controller
     /**
      * TAHAP 2: Membuat laporan personalisasi.
      */
+    // public function generatePersonalizedReport(Request $request, RiskAssessment $assessment): JsonResponse
+    // {
+    //     $user = $request->user();
+
+    //     // Otorisasi: Pastikan pengguna hanya bisa mengakses analisis miliknya
+    //     // if ($user->profile->id !== $assessment->user_profile_id) {
+    //     //     abort(403, 'Unauthorized action.');
+    //     // }
+    //     $profile = UserProfile::findAndCache($user->profile->id);
+
+
+    //     // 1. Dapatkan laporan dari Service Gemini
+    //     $fullReport = $this->reportGenerator->getFullReport($profile, $assessment);
+
+    //     // 2. Delegasikan update data & invalidasi cache ke Repository
+    //     $this->assessmentRepository->updateWithGeminiReport($assessment, $fullReport);
+
+    //     // 3. Kembalikan laporan lengkap ke frontend
+    //     return response()->json([
+    //         'message' => 'Personalized report generated successfully.',
+    //         'data' => $fullReport
+    //     ]);
+    // }
+
     public function generatePersonalizedReport(Request $request, RiskAssessment $assessment): JsonResponse
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        // Otorisasi: Pastikan pengguna hanya bisa mengakses analisis miliknya
-        if ($user->profile->id !== $assessment->user_profile_id) {
-            abort(403, 'Unauthorized action.');
+            $profile = UserProfile::findAndCache($user->profile->id);
+
+            // Log untuk debug
+            Log::info('Personalizing assessment', [
+                'user' => $user->id ?? null,
+                'profile' => $profile->id ?? null,
+                'assessment' => $assessment->id ?? null,
+            ]);
+
+            // Get Gemini report
+            $fullReport = $this->reportGenerator->getFullReport($profile, $assessment);
+
+            $this->assessmentRepository->updateWithGeminiReport($assessment, $fullReport);
+
+            return response()->json([
+                'message' => 'Personalized report generated successfully.',
+                'data' => $fullReport
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('❌ Failed to personalize: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => 'Internal error during personalization.'], 500);
         }
-        $profile = UserProfile::findAndCache($user->profile->id);
-
-
-        // 1. Dapatkan laporan dari Service Gemini
-        $fullReport = $this->reportGenerator->getFullReport($profile, $assessment);
-
-        // 2. Delegasikan update data & invalidasi cache ke Repository
-        $this->assessmentRepository->updateWithGeminiReport($assessment, $fullReport);
-
-        // 3. Kembalikan laporan lengkap ke frontend
-        return response()->json([
-            'message' => 'Personalized report generated successfully.',
-            'data' => $fullReport
-        ]);
     }
 }
