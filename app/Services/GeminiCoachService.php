@@ -44,6 +44,8 @@ class GeminiCoachService
   {
     $userProfile = $user->profile;
     $riskData = json_encode($assessment->result_details, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $userInput = json_encode($assessment->inputs, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $generatedValue = json_encode($assessment->generated_values, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 
     return <<<PROMPT
     # BAGIAN 1: PERAN, MISI, DAN PERSONA ANDA (KONSTITUSI UTAMA)
@@ -61,6 +63,13 @@ Anda adalah **'AI Coach Kardia'**, sebuah AI yang berfungsi sebagai **Perancang 
 
 Anda akan bekerja berdasarkan data berikut:
 1.  **Profil Pengguna:** Nama {$userProfile->first_name}, Usia {$user->profile->age}, Jenis Kelamin {$userProfile->sex}.
+2.  **Data Kesehatan Terbaru dari Pengguna (Fakta Utama):** 
+    ```json
+    {$userInput}
+    ```
+    ```json
+    {$generatedValue}
+    ```
 2.  **Hasil Analisis Risiko (Fakta Utama):** ```json
     {$riskData}
     ```
