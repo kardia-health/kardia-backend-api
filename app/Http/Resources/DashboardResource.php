@@ -71,9 +71,11 @@ class DashboardResource extends JsonResource
 
             // SOLUSI 2: Fallback ke program dari resource jika assessment tidak punya relasi program
             $programSlug = $assessmentProgram?->slug ?? $program?->slug ?? null;
+            $programStatus = $assessmentProgram?->status ?? $program?->status ?? null;
 
             return [
                 'program_slug'     => $programSlug, // Program slug jika ada
+                'program_status'     => $programStatus, // Program slug jika ada
                 'slug' => $item->slug,
                 'date' => Carbon::parse($item->created_at)->isoFormat('D MMMM YYYY'),
                 'model_used' => $item->model_used,
