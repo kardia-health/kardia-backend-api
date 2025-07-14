@@ -25,7 +25,11 @@ class RiskAssessmentRepository
       return new Collection();
     }
 
-    return $user->profile->riskAssessments()->latest()->get();
+    // Menambahkan eager loading untuk relasi 'coachingProgram'
+    return $user->profile->riskAssessments()
+      ->with('coachingProgram')
+      ->latest()
+      ->get();
   }
   /**
    * Membuat record analisis awal dan menghapus cache dasbor.

@@ -65,13 +65,11 @@ class DashboardResource extends JsonResource
         $graphData = $this->formatGraphData($assessments);
 
         // 3. Siapkan daftar riwayat
-        $history = $assessments->map(function ($item) use ($program) {
-            // SOLUSI 1: Gunakan program dari relasi assessment jika ada
-            $assessmentProgram = $item->program ?? $item->coaching_program ?? null;
-
-            // SOLUSI 2: Fallback ke program dari resource jika assessment tidak punya relasi program
-            $programSlug = $assessmentProgram?->slug ?? $program?->slug ?? null;
-            $programStatus = $assessmentProgram?->status ?? $program?->status ?? null;
+        $history = $assessments->map(function ($item) { // Hapus 'use ($program)' karena tidak dibutuhkan lagi di sini
+            // Langsung akses relasi 'coachingProgram' yang sudah di-load.
+            // Jika tidak ada, operator (?->) akan secara otomatis menghasilkan null.
+            $programSlug = $item->coachingProgram?->slug;
+            $programStatus = $item->coachingProgram?->status;
 
             return [
                 'program_slug'     => $programSlug, // Program slug jika ada
