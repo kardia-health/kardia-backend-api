@@ -34,12 +34,34 @@ class CoachingProgramResource extends JsonResource
         // --- Kalkulasi Minggu Saat Ini (current_week_number) ---
         $currentWeekNumber = 1; // Nilai default
         $startDateFormatted = 'Belum ditentukan';
+        $maxWeeks = 4; // Tentukan batas maksimal minggu di sini
+
         if ($this->start_date) {
-            // Hanya parse dan kalkulasi jika data start_date ada
-            $programStartDate = Carbon::parse($this->start_date)->startOfDay();
-            $daysPassed = max(0, $now->startOfDay()->diffInDays($programStartDate));
-            $currentWeekNumber = floor($daysPassed / 7) + 1;
-            $startDateFormatted = Carbon::parse($this->start_date)->isoFormat('D MMMM YYYY');
+            // Siapkan semua variabel tanggal yang dibutuhkan
+            $now = Carbon::now();
+            $startDate = Carbon::parse($this->start_date)->startOfDay();
+            $startDateFormatted = $startDate->isoFormat('D MMMM YYYY');
+
+            // 1. Cek apakah program SUDAH SELESAI
+            if ($this->end_date && $now->isAfter(Carbon::parse($this->end_date)->endOfDay())) {
+                $endDate = Carbon::parse($this->end_date)->endOfDay();
+                $totalProgramDays = $startDate->diffInDays($endDate);
+
+                // Hitung total minggu sebenarnya
+                $calculatedTotalWeeks = floor(($totalProgramDays - 1) / 7) + 1;
+                // Batasi hasilnya agar tidak lebih dari $maxWeeks
+                $currentWeekNumber = min($maxWeeks, $calculatedTotalWeeks);
+            }
+            // 2. Cek apakah program SEDANG BERJALAN
+            elseif ($now >= $startDate) {
+                $daysPassed = $startDate->diffInDays($now);
+
+                // Hitung minggu saat ini
+                $calculatedCurrentWeek = floor($daysPassed / 7) + 1;
+                // Batasi hasilnya juga agar tidak lebih dari $maxWeeks
+                $currentWeekNumber = min($maxWeeks, $calculatedCurrentWeek);
+            }
+            // 3. Jika program BELUM DIMULAI, $currentWeekNumber akan tetap 1.
         }
 
         // --- Kalkulasi lainnya ---
