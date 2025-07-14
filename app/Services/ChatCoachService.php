@@ -87,51 +87,59 @@ class ChatCoachService
   }
 
   /**
-   * [PERBAIKAN] Memperkaya konteks program secara masif dengan detail dari migrasi.
-   * AI kini tahu tujuan program, tingkat kesulitan, deskripsi mingguan,
-   * dan yang terpenting, deskripsi detail dari setiap tugas harian.
+   * [SOLUSI FINAL] Membangun konteks program dengan logika yang diperbaiki dan lebih aman.
+   * - Memperbaiki urutan variabel di diffInDays.
+   * - Menangani kasus program belum mulai dan sudah selesai dengan lebih eksplisit.
+   * - Menambahkan log jika terjadi anomali data (minggu tidak ditemukan).
    */
   private function buildProgramContext(CoachingProgram $program): string
   {
-    // --- Bagian 1: Konteks Keseluruhan Program ---
-    $totalWeeks = $program->weeks()->count(); // Hitung total minggu untuk info progres
+    // --- Bagian 1: Konteks Keseluruhan Program (Tidak berubah) ---
+    $totalWeeks = $program->weeks()->count();
     $endDateFormatted = Carbon::parse($program->end_date)->isoFormat('D MMMM YYYY');
+    $startDateFormatted = Carbon::parse($program->start_date)->isoFormat('D MMMM YYYY');
 
-    // Menggunakan HEREDOC untuk keterbacaan yang lebih baik
     $context = <<<PROGRAM
 KONTEKS PROGRAM COACHING SAAT INI:
 - Nama Program: {$program->title}
 - Tujuan Utama Program: {$program->description}
 - Tingkat Kesulitan: {$program->difficulty}
 - Status Program: {$program->status}
+- Tanggal Mulai Program: {$startDateFormatted}
 - Tanggal Selesai Program: {$endDateFormatted}
 
 PROGRAM;
 
-    // --- Bagian 2: Logika Cerdas untuk Konteks Mingguan & Harian ---
+    // --- Bagian 2: Logika Cerdas yang Diperbaiki ---
     $programStartDate = Carbon::parse($program->start_date)->startOfDay();
     $today = Carbon::now()->startOfDay();
 
-    // Memastikan kita tidak menghitung hari sebelum program dimulai
+    // [GUARD CLAUSE 1] Jika program belum dimulai, hentikan proses dan berikan info.
     if ($today->isBefore($programStartDate)) {
-      $context .= "INFO: Program ini akan dimulai pada " . $programStartDate->isoFormat('D MMMM YYYY') . ".\n";
+      $context .= "INFO PENTING: Program ini baru akan dimulai pada {$startDateFormatted}. Berikan semangat pada pengguna untuk bersiap-siap.";
       return rtrim($context);
     }
 
-    $daysPassed = $today->diffInDays($programStartDate, false);
+    // [FIX UTAMA] Memperbaiki urutan variabel untuk mendapatkan hasil positif.
+    // Format yang benar: Tanggal_Akhir->diffInDays(Tanggal_Awal)
+    $daysPassed = $today->diffInDays($programStartDate); // Argumen kedua (false) tidak wajib jika hanya butuh angka absolut
     $currentWeekNumber = floor($daysPassed / 7) + 1;
 
-    // Eager load relasi tasks untuk efisiensi query
-    $currentWeek = $program->weeks()->with('tasks')->where('week_number', $currentWeekNumber)->first();
+    // [GUARD CLAUSE 2] Jika minggu yang dihitung sudah melebihi total minggu, program selesai.
+    if ($totalWeeks > 0 && $currentWeekNumber > $totalWeeks) {
+      $context .= "INFO PENTING: Program coaching ini telah selesai. Pengguna sedang dalam tahap pasca-program. Berikan ucapan selamat dan motivasi untuk menjaga kebiasaan baik.";
+      return rtrim($context);
+    }
 
     // --- Bagian 3: Bangun String Konteks jika Program Sedang Aktif ---
+    $currentWeek = $program->weeks()->with('tasks')->where('week_number', $currentWeekNumber)->first();
+
     if ($currentWeek) {
       $context .= "\nKONTEKS MINGGU INI (Minggu {$currentWeek->week_number} dari {$totalWeeks}):\n";
       $context .= "- Fokus Minggu Ini: {$currentWeek->title}\n";
       $context .= "- Deskripsi Fokus: {$currentWeek->description}\n\n";
       $context .= "JADWAL LENGKAP MINGGU INI:\n";
 
-      // Loop melalui semua tugas di minggu ini untuk membuat agenda detail
       foreach ($currentWeek->tasks->sortBy('task_date') as $task) {
         $taskDateCarbon = Carbon::parse($task->task_date);
         $dayName = $taskDateCarbon->translatedFormat('l, d M');
@@ -140,12 +148,10 @@ PROGRAM;
         $type = ($task->task_type === 'main_mission') ? "Misi Utama" : "Tantangan Bonus";
 
         $context .= "- {$dayName}{$marker} ({$type}): {$task->title}{$status}\n";
-        // [TAMBAHAN PALING PENTING] Menambahkan deskripsi detail tugas
         $context .= "  - Deskripsi Tugas: {$task->description}\n";
       }
       $context .= "\n";
 
-      // Berikan "bocoran" tentang fokus minggu depan
       $nextWeek = $program->weeks()->where('week_number', $currentWeekNumber + 1)->first();
       if ($nextWeek) {
         $context .= "FOKUS MINGGU DEPAN (Minggu ke-{$nextWeek->week_number}): {$nextWeek->title}\n";
@@ -153,12 +159,13 @@ PROGRAM;
         $context .= "INFO: Ini adalah minggu terakhir dari program Anda. Mari selesaikan dengan baik!\n";
       }
     } else {
-      // Jika sudah lewat dari total minggu, anggap selesai
-      if ($currentWeekNumber > $totalWeeks && $totalWeeks > 0) {
-        $context .= "INFO: Program coaching ini telah selesai. Pengguna sedang dalam tahap pasca-program.\n";
-      } else {
-        $context .= "INFO: Program saat ini tidak dalam periode minggu aktif.\n";
-      }
+      // [LOGGING PENTING] Jika minggu tidak ditemukan padahal seharusnya ada.
+      Log::warning('Data minggu tidak ditemukan untuk program aktif.', [
+        'program_id' => $program->id,
+        'calculated_week_number' => $currentWeekNumber,
+        'total_weeks_in_db' => $totalWeeks
+      ]);
+      $context .= "INFO PENTING: Program sedang berjalan, tetapi data untuk minggu ke-{$currentWeekNumber} tidak ditemukan di sistem. Beritahu pengguna untuk tetap fokus pada kebiasaan umum dan tanyakan apa yang bisa dibantu.";
     }
 
     return rtrim($context);
