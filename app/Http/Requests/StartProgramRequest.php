@@ -35,7 +35,7 @@ class StartProgramRequest extends FormRequest
         // =================================================================
         // Aksi ini diizinkan HANYA JIKA ID profil dari assessment yang ditemukan
         // sama dengan ID profil dari pengguna yang sedang membuat permintaan.
-        return $this->user()->profile->id === $assessment->user_profile_id;
+        return $this->user()->profile->id == $assessment->user_profile_id;
     }
 
     /**
